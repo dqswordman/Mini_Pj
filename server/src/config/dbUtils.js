@@ -1,89 +1,73 @@
-const oracledb = require('oracledb');
+const { executeSQL } = require('./database');
 
-// 通用 SQL 执行函数
-async function executeQuery(sql, binds = [], opts = {}) {
-  let connection;
+// 通用查询函数
+async function query(sql, params = []) {
   try {
-    // 获取数据库连接
-    connection = await oracledb.getConnection();
+    const result = await executeSQL(sql, params);
+    return result.rows;
+  } catch (err) {
+    console.error('Query error:', err);
+    throw err;
+  }
+}
 
-    // 执行 SQL
-    const result = await connection.execute(sql, binds, {
-      outFormat: oracledb.OUT_FORMAT_OBJECT, // 默认输出格式
-      autoCommit: opts.autoCommit !== undefined ? opts.autoCommit : true, // 默认自动提交
-      ...opts,
-    });
+// 通用插入函数
+async function insert(tableName, data) {
+  const columns = Object.keys(data);
+  const values = Object.values(data);
+  const placeholders = columns.map((_, index) => `:${index + 1}`);
 
-    // 返回执行结果
+  const sql = `
+    INSERT INTO ${tableName} (${columns.join(', ')})
+    VALUES (${placeholders.join(', ')})
+  `;
+
+  try {
+    const result = await executeSQL(sql, values);
     return result;
   } catch (err) {
-    console.error('Error executing SQL:', err);
+    console.error('Insert error:', err);
     throw err;
-  } finally {
-    // 关闭连接
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (closeErr) {
-        console.error('Error closing connection:', closeErr);
-      }
-    }
   }
 }
 
-// 开始事务
-async function startTransaction() {
-  const connection = await oracledb.getConnection();
+// 通用更新函数
+async function update(tableName, data, whereClause, whereParams = []) {
+  const setClause = Object.keys(data)
+    .map((col, index) => `${col} = :${index + 1}`)
+    .join(', ');
+
+  const sql = `
+    UPDATE ${tableName}
+    SET ${setClause}
+    WHERE ${whereClause}
+  `;
+
   try {
-    await connection.execute('BEGIN');
-    return connection; // 返回连接以便后续操作
+    const result = await executeSQL(sql, [...Object.values(data), ...whereParams]);
+    return result;
   } catch (err) {
-    console.error('Error starting transaction:', err);
+    console.error('Update error:', err);
     throw err;
   }
 }
 
-// 提交事务
-async function commitTransaction(connection) {
-  if (connection) {
-    try {
-      await connection.commit();
-      console.log('Transaction committed successfully');
-    } catch (err) {
-      console.error('Error committing transaction:', err);
-      throw err;
-    } finally {
-      try {
-        await connection.close();
-      } catch (closeErr) {
-        console.error('Error closing connection:', closeErr);
-      }
-    }
-  }
-}
+// 通用删除函数
+async function remove(tableName, whereClause, whereParams = []) {
+  const sql = `DELETE FROM ${tableName} WHERE ${whereClause}`;
 
-// 回滚事务
-async function rollbackTransaction(connection) {
-  if (connection) {
-    try {
-      await connection.rollback();
-      console.log('Transaction rolled back successfully');
-    } catch (err) {
-      console.error('Error rolling back transaction:', err);
-      throw err;
-    } finally {
-      try {
-        await connection.close();
-      } catch (closeErr) {
-        console.error('Error closing connection:', closeErr);
-      }
-    }
+  try {
+    const result = await executeSQL(sql, whereParams);
+    return result;
+  } catch (err) {
+    console.error('Delete error:', err);
+    throw err;
   }
 }
 
 module.exports = {
-  executeQuery,
-  startTransaction,
-  commitTransaction,
-  rollbackTransaction,
+  query,
+  insert,
+  update,
+  remove
 };
