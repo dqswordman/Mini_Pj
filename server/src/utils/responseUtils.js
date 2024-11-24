@@ -1,3 +1,4 @@
+// src/utils/responseUtils.js
 // HTTP状态码
 exports.STATUS_CODES = {
   OK: 200,
@@ -17,8 +18,8 @@ exports.successResponse = (data, message = 'Success') => ({
 });
 
 // 错误响应
-exports.errorResponse = (message = 'Error', code = 500) => ({
+exports.errorResponse = (message, code) => ({
   success: false,
   message,
-  code
+  code: code || exports.STATUS_CODES.INTERNAL_ERROR
 });

@@ -214,7 +214,8 @@ module.exports = {
   getConnection,
   executeSQL,
   initDatabase,
-  testConnection
+  testConnection,
+  oracledb  // 添加这一行
 };
 
 // 如果直接运行此文件

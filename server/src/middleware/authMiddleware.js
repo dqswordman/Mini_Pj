@@ -1,43 +1,37 @@
 const jwt = require('jsonwebtoken');
-const { errorResponse } = require('../utils/responseUtils');
+const { CustomError } = require('../utils/errorUtils');
 
 exports.authenticate = async (req, res, next) => {
   try {
-    // 从headers获取token
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json(errorResponse('No auth token'));
+      throw new CustomError('Authentication token is missing', 401);
     }
 
     const token = authHeader.split(' ')[1];
-    if (!token) {
-      return res.status(401).json(errorResponse('No token provided'));
-    }
-
-    // 验证token
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = decoded;
       next();
     } catch (error) {
-      return res.status(401).json(errorResponse('Invalid token'));
+      if (error.name === 'TokenExpiredError') {
+        throw new CustomError('Token has expired', 401);
+      }
+      throw new CustomError('Invalid token', 401);
     }
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    return res.status(500).json(errorResponse('Auth middleware error'));
+    next(error);
   }
 };
 
-exports.authorize = (...allowedRoles) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json(errorResponse('User not authenticated'));
-    }
+exports.authorize = (...allowedRoles) => (req, res, next) => {
+  if (!req.user) {
+    return next(new CustomError('User not authenticated', 401));
+  }
 
-    if (allowedRoles.length && !allowedRoles.includes(req.user.position)) {
-      return res.status(403).json(errorResponse('Access forbidden'));
-    }
+  if (!allowedRoles.includes(req.user.position)) {
+    return next(new CustomError('Access denied', 403));
+  }
 
-    next();
-  };
+  next();
 };

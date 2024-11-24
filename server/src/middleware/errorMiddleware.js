@@ -1,18 +1,11 @@
-const { errorResponse, STATUS_CODES } = require('../utils/responseUtils');
-
 exports.errorHandler = (err, req, res, next) => {
-  console.error(err);
+  const statusCode = err.statusCode || 500;
+  const message = err.message || 'Internal server error';
 
-  if (err.name === 'ValidationError') {
-    return res.status(STATUS_CODES.BAD_REQUEST)
-      .json(errorResponse(err.message));
-  }
-
-  if (err.name === 'UnauthorizedError') {
-    return res.status(STATUS_CODES.UNAUTHORIZED)
-      .json(errorResponse('Unauthorized access'));
-  }
-
-  return res.status(STATUS_CODES.INTERNAL_ERROR)
-    .json(errorResponse('Internal server error'));
+  console.error(`[${new Date().toISOString()}] Error: ${message}, Path: ${req.path}`);
+  
+  res.status(statusCode).json({
+    success: false,
+    message,
+  });
 };

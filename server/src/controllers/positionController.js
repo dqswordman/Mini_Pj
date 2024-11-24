@@ -1,3 +1,4 @@
+// src/controllers/positionController.js
 const positionService = require('../services/positionService');
 const { successResponse, errorResponse, STATUS_CODES } = require('../utils/responseUtils');
 
@@ -8,7 +9,7 @@ class PositionController {
       res.json(successResponse(positions));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch positions'));
+        .json(errorResponse('Failed to fetch positions', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -19,10 +20,10 @@ class PositionController {
     } catch (error) {
       if (error.message === 'Position not found') {
         return res.status(STATUS_CODES.NOT_FOUND)
-          .json(errorResponse('Position not found'));
+          .json(errorResponse('Position not found', STATUS_CODES.NOT_FOUND));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch position'));
+        .json(errorResponse('Failed to fetch position', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -32,7 +33,7 @@ class PositionController {
       res.json(successResponse(employees));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch position employees'));
+        .json(errorResponse('Failed to fetch position employees', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -42,7 +43,7 @@ class PositionController {
       res.json(successResponse(permissions));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch position permissions'));
+        .json(errorResponse('Failed to fetch position permissions', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -54,10 +55,10 @@ class PositionController {
     } catch (error) {
       if (error.message.includes('unique constraint')) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Position name already exists'));
+          .json(errorResponse('Position name already exists', STATUS_CODES.BAD_REQUEST));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to create position'));
+        .json(errorResponse('Failed to create position', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -68,10 +69,10 @@ class PositionController {
     } catch (error) {
       if (error.message === 'Position not found') {
         return res.status(STATUS_CODES.NOT_FOUND)
-          .json(errorResponse('Position not found'));
+          .json(errorResponse('Position not found', STATUS_CODES.NOT_FOUND));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to update position'));
+        .json(errorResponse('Failed to update position', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -82,10 +83,10 @@ class PositionController {
     } catch (error) {
       if (error.message.includes('Cannot delete position')) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse(error.message));
+          .json(errorResponse(error.message, STATUS_CODES.BAD_REQUEST));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to delete position'));
+        .json(errorResponse('Failed to delete position', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 }
