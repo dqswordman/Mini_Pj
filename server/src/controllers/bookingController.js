@@ -1,3 +1,4 @@
+// src/controllers/bookingController.js
 const bookingService = require('../services/bookingService');
 const { successResponse, errorResponse, STATUS_CODES } = require('../utils/responseUtils');
 
@@ -11,7 +12,7 @@ class BookingController {
       // 基本验证
       if (!roomId || !startTime || !endTime) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Missing required fields'));
+          .json(errorResponse('Missing required fields', STATUS_CODES.BAD_REQUEST));
       }
 
       // 验证时间
@@ -20,12 +21,12 @@ class BookingController {
 
       if (start >= end) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('End time must be after start time'));
+          .json(errorResponse('End time must be after start time', STATUS_CODES.BAD_REQUEST));
       }
 
       if (start < new Date()) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Cannot book in the past'));
+          .json(errorResponse('Cannot book in the past', STATUS_CODES.BAD_REQUEST));
       }
 
       const booking = await bookingService.createBooking({
@@ -40,14 +41,14 @@ class BookingController {
     } catch (error) {
       if (error.message.includes('Time slot is already booked')) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Selected time slot is not available'));
+          .json(errorResponse('Selected time slot is not available', STATUS_CODES.BAD_REQUEST));
       }
       if (error.message.includes('Room is disabled')) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Selected room is not available'));
+          .json(errorResponse('Selected room is not available', STATUS_CODES.BAD_REQUEST));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to create booking'));
+        .json(errorResponse('Failed to create booking', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -60,17 +61,17 @@ class BookingController {
       if (booking.EMPLOYEE_ID !== req.user.employeeId && 
           !['Admin', 'Manager'].includes(req.user.position)) {
         return res.status(STATUS_CODES.FORBIDDEN)
-          .json(errorResponse('Unauthorized to view this booking'));
+          .json(errorResponse('Unauthorized to view this booking', STATUS_CODES.FORBIDDEN));
       }
 
       res.json(successResponse(booking));
     } catch (error) {
       if (error.message === 'Booking not found') {
         return res.status(STATUS_CODES.NOT_FOUND)
-          .json(errorResponse('Booking not found'));
+          .json(errorResponse('Booking not found', STATUS_CODES.NOT_FOUND));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch booking'));
+        .json(errorResponse('Failed to fetch booking', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -84,14 +85,14 @@ class BookingController {
       if (employeeId !== req.user.employeeId && 
           !['Admin', 'Manager'].includes(req.user.position)) {
         return res.status(STATUS_CODES.FORBIDDEN)
-          .json(errorResponse('Unauthorized to view these bookings'));
+          .json(errorResponse('Unauthorized to view these bookings', STATUS_CODES.FORBIDDEN));
       }
 
       const bookings = await bookingService.getUserBookings(employeeId, status);
       res.json(successResponse(bookings));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch user bookings'));
+        .json(errorResponse('Failed to fetch user bookings', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -104,7 +105,7 @@ class BookingController {
 
       if (!reason) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Cancellation reason is required'));
+          .json(errorResponse('Cancellation reason is required', STATUS_CODES.BAD_REQUEST));
       }
 
       const cancelledBooking = await bookingService.cancelBooking(
@@ -117,18 +118,18 @@ class BookingController {
     } catch (error) {
       if (error.message === 'Booking not found') {
         return res.status(STATUS_CODES.NOT_FOUND)
-          .json(errorResponse('Booking not found'));
+          .json(errorResponse('Booking not found', STATUS_CODES.NOT_FOUND));
       }
       if (error.message === 'Unauthorized to cancel this booking') {
         return res.status(STATUS_CODES.FORBIDDEN)
-          .json(errorResponse('Unauthorized to cancel this booking'));
+          .json(errorResponse('Unauthorized to cancel this booking', STATUS_CODES.FORBIDDEN));
       }
       if (error.message === 'Cannot cancel booking in current status') {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Cannot cancel booking in current status'));
+          .json(errorResponse('Cannot cancel booking in current status', STATUS_CODES.BAD_REQUEST));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to cancel booking'));
+        .json(errorResponse('Failed to cancel booking', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -141,7 +142,7 @@ class BookingController {
 
       if (isApproved === undefined || !reason) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Approval decision and reason are required'));
+          .json(errorResponse('Approval decision and reason are required', STATUS_CODES.BAD_REQUEST));
       }
 
       const updatedBooking = await bookingService.approveBooking(
@@ -156,33 +157,14 @@ class BookingController {
     } catch (error) {
       if (error.message === 'Booking not found') {
         return res.status(STATUS_CODES.NOT_FOUND)
-          .json(errorResponse('Booking not found'));
+          .json(errorResponse('Booking not found', STATUS_CODES.NOT_FOUND));
       }
       if (error.message === 'Booking is not in pending status') {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Can only approve pending bookings'));
+          .json(errorResponse('Can only approve pending bookings', STATUS_CODES.BAD_REQUEST));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to process approval'));
-    }
-  }
-
-  // 验证SECRET NUMBER
-  async verifySecretNumber(req, res) {
-    try {
-      const { bookingId, secretNumber } = req.body;
-
-      const booking = await bookingService.verifySecretNumber(bookingId, secretNumber);
-      
-      if (!booking) {
-        return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Invalid secret number'));
-      }
-
-      res.json(successResponse(booking, 'Secret number verified successfully'));
-    } catch (error) {
-      res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to verify secret number'));
+        .json(errorResponse('Failed to process approval', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 }

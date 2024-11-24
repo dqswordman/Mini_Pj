@@ -1,3 +1,4 @@
+// src/controllers/roomController.js
 const roomService = require('../services/roomService');
 const { successResponse, errorResponse, STATUS_CODES } = require('../utils/responseUtils');
 
@@ -8,7 +9,7 @@ class RoomController {
       res.json(successResponse(rooms));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch rooms'));
+        .json(errorResponse('Failed to fetch rooms', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -19,10 +20,10 @@ class RoomController {
     } catch (error) {
       if (error.message === 'Room not found') {
         return res.status(STATUS_CODES.NOT_FOUND)
-          .json(errorResponse('Room not found'));
+          .json(errorResponse('Room not found', STATUS_CODES.NOT_FOUND));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch room'));
+        .json(errorResponse('Failed to fetch room', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -39,7 +40,7 @@ class RoomController {
 
       if (!roomName || !buildingId || !floorNumber || !capacity) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Missing required fields'));
+          .json(errorResponse('Missing required fields', STATUS_CODES.BAD_REQUEST));
       }
 
       const newRoom = await roomService.createRoom({
@@ -55,7 +56,7 @@ class RoomController {
         .json(successResponse(newRoom, 'Room created successfully'));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to create room'));
+        .json(errorResponse('Failed to create room', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -72,7 +73,7 @@ class RoomController {
 
       if (!roomName || !buildingId || !floorNumber || !capacity) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Missing required fields'));
+          .json(errorResponse('Missing required fields', STATUS_CODES.BAD_REQUEST));
       }
 
       const updatedRoom = await roomService.updateRoom(req.params.id, {
@@ -88,10 +89,10 @@ class RoomController {
     } catch (error) {
       if (error.message === 'Room not found') {
         return res.status(STATUS_CODES.NOT_FOUND)
-          .json(errorResponse('Room not found'));
+          .json(errorResponse('Room not found', STATUS_CODES.NOT_FOUND));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to update room'));
+        .json(errorResponse('Failed to update room', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -102,10 +103,10 @@ class RoomController {
     } catch (error) {
       if (error.message.includes('Cannot delete room')) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse(error.message));
+          .json(errorResponse(error.message, STATUS_CODES.BAD_REQUEST));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to delete room'));
+        .json(errorResponse('Failed to delete room', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -116,14 +117,14 @@ class RoomController {
 
       if (!date) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Date is required'));
+          .json(errorResponse('Date is required', STATUS_CODES.BAD_REQUEST));
       }
 
       const availability = await roomService.getRoomAvailability(id, new Date(date));
       res.json(successResponse(availability));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch room availability'));
+        .json(errorResponse('Failed to fetch room availability', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -148,7 +149,7 @@ class RoomController {
       res.json(successResponse(rooms));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to search rooms'));
+        .json(errorResponse('Failed to search rooms', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 }

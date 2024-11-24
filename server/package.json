@@ -15,7 +15,12 @@
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix"
   },
-  "keywords": ["meeting-room", "booking-system", "express", "node"],
+  "keywords": [
+    "meeting-room",
+    "booking-system",
+    "express",
+    "node"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -26,6 +31,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "oracledb": "^6.2.0",
+    "qrcode": "^1.5.4",
     "winston": "^3.11.0"
   },
   "devDependencies": {
