@@ -3,6 +3,7 @@ const reportService = require('../services/reportService');
 const { successResponse, errorResponse, STATUS_CODES } = require('../utils/responseUtils');
 
 class ReportController {
+  
   // 获取会议室使用统计
   async getRoomUsageStats(req, res) {
     try {
