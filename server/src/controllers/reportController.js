@@ -1,3 +1,4 @@
+// src/controllers/reportController.js
 const reportService = require('../services/reportService');
 const { successResponse, errorResponse, STATUS_CODES } = require('../utils/responseUtils');
 
@@ -9,7 +10,7 @@ class ReportController {
       
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Start date and end date are required'));
+          .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
       }
 
       const stats = await reportService.getRoomUsageStats(
@@ -19,7 +20,7 @@ class ReportController {
       res.json(successResponse(stats));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch room usage statistics'));
+        .json(errorResponse('Failed to fetch room usage statistics', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -31,7 +32,7 @@ class ReportController {
 
       if (!month || !year) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Month and year are required'));
+          .json(errorResponse('Month and year are required', STATUS_CODES.BAD_REQUEST));
       }
 
       const stats = await reportService.getDailyUsageStats(
@@ -42,7 +43,7 @@ class ReportController {
       res.json(successResponse(stats));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch daily usage statistics'));
+        .json(errorResponse('Failed to fetch daily usage statistics', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -53,7 +54,7 @@ class ReportController {
 
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Start date and end date are required'));
+          .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
       }
 
       const stats = await reportService.getBookingUsageStats(
@@ -63,7 +64,7 @@ class ReportController {
       res.json(successResponse(stats));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch booking usage statistics'));
+        .json(errorResponse('Failed to fetch booking usage statistics', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -74,7 +75,7 @@ class ReportController {
 
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Start date and end date are required'));
+          .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
       }
 
       const stats = await reportService.getLockStats(
@@ -84,7 +85,7 @@ class ReportController {
       res.json(successResponse(stats));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch lock statistics'));
+        .json(errorResponse('Failed to fetch lock statistics', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -96,7 +97,7 @@ class ReportController {
 
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Start date and end date are required'));
+          .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
       }
 
       const history = await reportService.getLockHistory(
@@ -107,7 +108,7 @@ class ReportController {
       res.json(successResponse(history));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch lock history'));
+        .json(errorResponse('Failed to fetch lock history', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 
@@ -118,7 +119,7 @@ class ReportController {
 
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse('Start date and end date are required'));
+          .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
       }
 
       const stats = await reportService.getSystemLogsStats(
@@ -128,7 +129,7 @@ class ReportController {
       res.json(successResponse(stats));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
-        .json(errorResponse('Failed to fetch system logs statistics'));
+        .json(errorResponse('Failed to fetch system logs statistics', STATUS_CODES.INTERNAL_ERROR));
     }
   }
 }

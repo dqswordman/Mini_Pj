@@ -7,8 +7,15 @@ const { STATUS_CODES } = require('../../../src/utils/responseUtils');
 // Mock console.error to suppress error outputs during tests
 console.error = jest.fn();
 
-// Mock accessService
-jest.mock('../../../src/services/accessService');
+// Mock accessService with all required methods
+jest.mock('../../../src/services/accessService', () => ({
+  verifySecretNumber: jest.fn(),
+  createAccessLog: jest.fn(),
+  getBookingById: jest.fn(),
+  generateQRCode: jest.fn(),
+  getAccessLogs: jest.fn(),
+  checkUnusedBookings: jest.fn()
+}));
 
 describe('AccessController', () => {
   let req;
@@ -187,6 +194,30 @@ describe('AccessController', () => {
         success: false,
         message: 'Unauthorized to access this booking',
         code: STATUS_CODES.FORBIDDEN
+      });
+    });
+
+    it('should handle error when generating QR code', async () => {
+      // Arrange
+      const mockBooking = {
+        BOOKING_ID: 1,
+        EMPLOYEE_ID: 1,
+        SECRET_NUMBER: 'ABC123'
+      };
+      req.params = { bookingId: '1' };
+      
+      accessService.getBookingById.mockResolvedValue(mockBooking);
+      accessService.generateQRCode.mockRejectedValue(new Error('QR code generation failed'));
+
+      // Act
+      await accessController.generateQRCode(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(STATUS_CODES.INTERNAL_ERROR);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Failed to generate QR code',
+        code: STATUS_CODES.INTERNAL_ERROR
       });
     });
   });
