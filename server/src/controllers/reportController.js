@@ -3,7 +3,52 @@ const reportService = require('../services/reportService');
 const { successResponse, errorResponse, STATUS_CODES } = require('../utils/responseUtils');
 
 class ReportController {
-  
+  // 验证日期
+  validateDates(startDate, endDate) {
+    // 检查日期格式
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return { isValid: false, message: 'Invalid date format' };
+    }
+
+    // 检查日期顺序
+    if (start >= end) {
+      return { isValid: false, message: 'End date must be after start date' };
+    }
+
+    // 检查日期范围（不超过1年）
+    const oneYear = 365 * 24 * 60 * 60 * 1000;
+    if (end - start > oneYear) {
+      return { isValid: false, message: 'Date range cannot exceed one year' };
+    }
+
+    // 检查未来日期
+    const now = new Date();
+    if (end > now) {
+      return { isValid: false, message: 'Cannot generate report for future dates' };
+    }
+
+    return { isValid: true };
+  }
+
+  // 验证月份和年份
+  validateMonthYear(month, year) {
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
+
+    if (isNaN(monthNum) || isNaN(yearNum)) {
+      return { isValid: false, message: 'Month and year must be numeric' };
+    }
+
+    if (monthNum < 1 || monthNum > 12) {
+      return { isValid: false, message: 'Invalid month value' };
+    }
+
+    return { isValid: true };
+  }
+
   // 获取会议室使用统计
   async getRoomUsageStats(req, res) {
     try {
@@ -12,6 +57,12 @@ class ReportController {
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
+      }
+
+      const dateValidation = this.validateDates(startDate, endDate);
+      if (!dateValidation.isValid) {
+        return res.status(STATUS_CODES.BAD_REQUEST)
+          .json(errorResponse(dateValidation.message, STATUS_CODES.BAD_REQUEST));
       }
 
       const stats = await reportService.getRoomUsageStats(
@@ -36,6 +87,12 @@ class ReportController {
           .json(errorResponse('Month and year are required', STATUS_CODES.BAD_REQUEST));
       }
 
+      const validation = this.validateMonthYear(month, year);
+      if (!validation.isValid) {
+        return res.status(STATUS_CODES.BAD_REQUEST)
+          .json(errorResponse(validation.message, STATUS_CODES.BAD_REQUEST));
+      }
+
       const stats = await reportService.getDailyUsageStats(
         roomId,
         parseInt(month),
@@ -56,6 +113,12 @@ class ReportController {
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
+      }
+
+      const dateValidation = this.validateDates(startDate, endDate);
+      if (!dateValidation.isValid) {
+        return res.status(STATUS_CODES.BAD_REQUEST)
+          .json(errorResponse(dateValidation.message, STATUS_CODES.BAD_REQUEST));
       }
 
       const stats = await reportService.getBookingUsageStats(
@@ -79,6 +142,12 @@ class ReportController {
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
       }
 
+      const dateValidation = this.validateDates(startDate, endDate);
+      if (!dateValidation.isValid) {
+        return res.status(STATUS_CODES.BAD_REQUEST)
+          .json(errorResponse(dateValidation.message, STATUS_CODES.BAD_REQUEST));
+      }
+
       const stats = await reportService.getLockStats(
         new Date(startDate),
         new Date(endDate)
@@ -95,10 +164,22 @@ class ReportController {
     try {
       const { departmentId } = req.params;
       const { startDate, endDate } = req.query;
+      
+      // 权限检查
+      if (req.user.position !== 'Admin' && req.user.departmentId !== departmentId) {
+        return res.status(STATUS_CODES.FORBIDDEN)
+          .json(errorResponse('Unauthorized to access this department history', STATUS_CODES.FORBIDDEN));
+      }
 
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
+      }
+
+      const dateValidation = this.validateDates(startDate, endDate);
+      if (!dateValidation.isValid) {
+        return res.status(STATUS_CODES.BAD_REQUEST)
+          .json(errorResponse(dateValidation.message, STATUS_CODES.BAD_REQUEST));
       }
 
       const history = await reportService.getLockHistory(
@@ -121,6 +202,12 @@ class ReportController {
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
+      }
+
+      const dateValidation = this.validateDates(startDate, endDate);
+      if (!dateValidation.isValid) {
+        return res.status(STATUS_CODES.BAD_REQUEST)
+          .json(errorResponse(dateValidation.message, STATUS_CODES.BAD_REQUEST));
       }
 
       const stats = await reportService.getSystemLogsStats(

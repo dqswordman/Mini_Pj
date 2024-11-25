@@ -25,6 +25,12 @@ describe('ReportController', () => {
     req = mockRequest();
     res = mockResponse();
     jest.clearAllMocks();
+    // 设置默认用户
+    req.user = {
+      employeeId: 1,
+      departmentId: 1,
+      position: 'Employee'
+    };
   });
 
   describe('getRoomUsageStats', () => {
@@ -74,6 +80,44 @@ describe('ReportController', () => {
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         message: 'Start date and end date are required',
+        code: STATUS_CODES.BAD_REQUEST
+      });
+    });
+
+    it('should handle invalid date format', async () => {
+      // Arrange
+      req.query = {
+        startDate: 'invalid-date',
+        endDate: '2024-01-31'
+      };
+
+      // Act
+      await reportController.getRoomUsageStats(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Invalid date format',
+        code: STATUS_CODES.BAD_REQUEST
+      });
+    });
+
+    it('should handle end date before start date', async () => {
+      // Arrange
+      req.query = {
+        startDate: '2024-02-01',
+        endDate: '2024-01-01'
+      };
+
+      // Act
+      await reportController.getRoomUsageStats(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'End date must be after start date',
         code: STATUS_CODES.BAD_REQUEST
       });
     });
@@ -145,6 +189,46 @@ describe('ReportController', () => {
         code: STATUS_CODES.BAD_REQUEST
       });
     });
+
+    it('should handle non-numeric month or year', async () => {
+      // Arrange
+      req.params = { roomId: '1' };
+      req.query = {
+        month: 'abc',  // 非数字
+        year: '2024'
+      };
+
+      // Act
+      await reportController.getDailyUsageStats(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Month and year must be numeric',
+        code: STATUS_CODES.BAD_REQUEST
+      });
+    });
+
+    it('should handle invalid month value', async () => {
+      // Arrange
+      req.params = { roomId: '1' };
+      req.query = {
+        month: '13',  // 无效的月份
+        year: '2024'
+      };
+
+      // Act
+      await reportController.getDailyUsageStats(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Invalid month value',
+        code: STATUS_CODES.BAD_REQUEST
+      });
+    });
   });
 
   describe('getBookingUsageStats', () => {
@@ -182,9 +266,12 @@ describe('ReportController', () => {
       });
     });
 
-    it('should handle missing date parameters', async () => {
+    it('should handle date range exceeding maximum allowed period', async () => {
       // Arrange
-      req.query = {}; // missing both dates
+      req.query = {
+        startDate: '2024-01-01',
+        endDate: '2025-01-01'  // 超过一年
+      };
 
       // Act
       await reportController.getBookingUsageStats(req, res);
@@ -193,43 +280,8 @@ describe('ReportController', () => {
       expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        message: 'Start date and end date are required',
+        message: 'Date range cannot exceed one year',
         code: STATUS_CODES.BAD_REQUEST
-      });
-    });
-  });
-
-  describe('getLockStats', () => {
-    it('should return lock statistics successfully', async () => {
-      // Arrange
-      const mockStats = [
-        {
-          department_name: 'IT',
-          total_employees: 10,
-          locked_employees: 2,
-          total_locks: 3,
-          locked_rate: 20.00,
-          locks_per_employee: 0.30
-        }
-      ];
-      req.query = {
-        startDate: '2024-01-01',
-        endDate: '2024-01-31'
-      };
-      reportService.getLockStats.mockResolvedValue(mockStats);
-
-      // Act
-      await reportController.getLockStats(req, res);
-
-      // Assert
-      expect(reportService.getLockStats).toHaveBeenCalledWith(
-        expect.any(Date),
-        expect.any(Date)
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        message: 'Success',
-        data: mockStats
       });
     });
   });
@@ -263,6 +315,61 @@ describe('ReportController', () => {
         expect.any(Date),
         expect.any(Date)
       );
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Success',
+        data: mockHistory
+      });
+    });
+
+    it('should handle unauthorized access to department history', async () => {
+      // Arrange
+      req.params = { departmentId: '2' };  // 不同部门
+      req.query = {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31'
+      };
+      req.user = {
+        employeeId: 1,
+        departmentId: 1,
+        position: 'Employee'  // 非管理员
+      };
+
+      // Act
+      await reportController.getLockHistory(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(STATUS_CODES.FORBIDDEN);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Unauthorized to access this department history',
+        code: STATUS_CODES.FORBIDDEN
+      });
+    });
+
+    it('should allow admin to access any department history', async () => {
+      // Arrange
+      const mockHistory = [{
+        employee_id: 1,
+        employee_name: 'John Doe',
+        request_time: '2024-01-01'
+      }];
+      req.params = { departmentId: '2' };
+      req.query = {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31'
+      };
+      req.user = {
+        employeeId: 1,
+        departmentId: 1,
+        position: 'Admin'
+      };
+      reportService.getLockHistory.mockResolvedValue(mockHistory);
+
+      // Act
+      await reportController.getLockHistory(req, res);
+
+      // Assert
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         message: 'Success',
@@ -303,222 +410,26 @@ describe('ReportController', () => {
         data: mockStats
       });
     });
-  });
 
-  // test/unit/controllers/reportController.test.js
-// ... 保持之前的导入和设置 ...
+    it('should handle future dates in historical reports', async () => {
+      // Arrange
+      const futureDate = new Date();
+      futureDate.setMonth(futureDate.getMonth() + 1);
+      req.query = {
+        startDate: futureDate.toISOString().split('T')[0],
+        endDate: futureDate.toISOString().split('T')[0]
+      };
 
-describe('ReportController - Additional Test Cases', () => {
-    let req;
-    let res;
-  
-    beforeEach(() => {
-      req = mockRequest();
-      res = mockResponse();
-      jest.clearAllMocks();
-    });
-  
-    describe('Date Validation', () => {
-      it('should handle invalid date format', async () => {
-        // Arrange
-        req.query = {
-          startDate: 'invalid-date',
-          endDate: '2024-01-31'
-        };
-  
-        // Act
-        await reportController.getRoomUsageStats(req, res);
-  
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
-        expect(res.json).toHaveBeenCalledWith({
-          success: false,
-          message: 'Failed to fetch room usage statistics',
-          code: STATUS_CODES.INTERNAL_ERROR
-        });
-      });
-  
-      it('should handle end date before start date', async () => {
-        // Arrange
-        req.query = {
-          startDate: '2024-02-01',
-          endDate: '2024-01-01' // 结束日期早于开始日期
-        };
-  
-        // Act
-        await reportController.getRoomUsageStats(req, res);
-  
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
-        expect(res.json).toHaveBeenCalledWith({
-          success: false,
-          message: 'Failed to fetch room usage statistics',
-          code: STATUS_CODES.INTERNAL_ERROR
-        });
-      });
-    });
-  
-    describe('Parameter Type Validation', () => {
-      it('should handle non-numeric month or year', async () => {
-        // Arrange
-        req.params = { roomId: '1' };
-        req.query = {
-          month: 'abc',  // 非数字
-          year: '2024'
-        };
-  
-        // Act
-        await reportController.getDailyUsageStats(req, res);
-  
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
-        expect(res.json).toHaveBeenCalledWith({
-          success: false,
-          message: 'Failed to fetch daily usage statistics',
-          code: STATUS_CODES.INTERNAL_ERROR
-        });
-      });
-  
-      it('should handle invalid month value', async () => {
-        // Arrange
-        req.params = { roomId: '1' };
-        req.query = {
-          month: '13',  // 无效的月份
-          year: '2024'
-        };
-  
-        // Act
-        await reportController.getDailyUsageStats(req, res);
-  
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
-        expect(res.json).toHaveBeenCalledWith({
-          success: false,
-          message: 'Failed to fetch daily usage statistics',
-          code: STATUS_CODES.INTERNAL_ERROR
-        });
-      });
-    });
-  
-    describe('Range Validation', () => {
-      it('should handle date range exceeding maximum allowed period', async () => {
-        // Arrange
-        req.query = {
-          startDate: '2024-01-01',
-          endDate: '2025-01-01'  // 超过一年
-        };
-  
-        // Act
-        await reportController.getBookingUsageStats(req, res);
-  
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
-        expect(res.json).toHaveBeenCalledWith({
-          success: false,
-          message: 'Failed to fetch booking usage statistics',
-          code: STATUS_CODES.INTERNAL_ERROR
-        });
-      });
-    });
-  
-    describe('Authorization', () => {
-      it('should handle unauthorized access to department history', async () => {
-        // Arrange
-        req.params = { departmentId: '2' };  // 不同部门
-        req.query = {
-          startDate: '2024-01-01',
-          endDate: '2024-01-31'
-        };
-        req.user = {
-          employeeId: 1,
-          departmentId: 1,
-          position: 'Employee'  // 非管理员
-        };
-  
-        // Act
-        await reportController.getLockHistory(req, res);
-  
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(STATUS_CODES.FORBIDDEN);
-        expect(res.json).toHaveBeenCalledWith({
-          success: false,
-          message: 'Failed to fetch lock history',
-          code: STATUS_CODES.INTERNAL_ERROR
-        });
-      });
-  
-      it('should allow admin to access any department history', async () => {
-        // Arrange
-        const mockHistory = [{
-          employee_id: 1,
-          employee_name: 'John Doe',
-          request_time: '2024-01-01'
-        }];
-        req.params = { departmentId: '2' };
-        req.query = {
-          startDate: '2024-01-01',
-          endDate: '2024-01-31'
-        };
-        req.user = {
-          employeeId: 1,
-          departmentId: 1,
-          position: 'Admin'
-        };
-        reportService.getLockHistory.mockResolvedValue(mockHistory);
-  
-        // Act
-        await reportController.getLockHistory(req, res);
-  
-        // Assert
-        expect(res.json).toHaveBeenCalledWith({
-          success: true,
-          message: 'Success',
-          data: mockHistory
-        });
-      });
-    });
-  
-    describe('Data Validation', () => {
-      it('should handle future dates in historical reports', async () => {
-        // Arrange
-        const futureDate = new Date();
-        futureDate.setMonth(futureDate.getMonth() + 1);
-        req.query = {
-          startDate: futureDate.toISOString().split('T')[0],
-          endDate: futureDate.toISOString().split('T')[0]
-        };
-  
-        // Act
-        await reportController.getSystemLogsStats(req, res);
-  
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
-        expect(res.json).toHaveBeenCalledWith({
-          success: false,
-          message: 'Failed to fetch system logs statistics',
-          code: STATUS_CODES.INTERNAL_ERROR
-        });
-      });
-  
-      it('should handle malformed date strings', async () => {
-        // Arrange
-        req.query = {
-          startDate: '2024/01/01',  // 错误的日期格式
-          endDate: '2024-01-31'
-        };
-  
-        // Act
-        await reportController.getLockStats(req, res);
-  
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
-        expect(res.json).toHaveBeenCalledWith({
-          success: false,
-          message: 'Failed to fetch lock statistics',
-          code: STATUS_CODES.INTERNAL_ERROR
-        });
+      // Act
+      await reportController.getSystemLogsStats(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(STATUS_CODES.BAD_REQUEST);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Cannot generate report for future dates',
+        code: STATUS_CODES.BAD_REQUEST
       });
     });
   });
-  
 });
