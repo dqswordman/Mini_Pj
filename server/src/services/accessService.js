@@ -1,5 +1,7 @@
-const { executeQuery } = require('../config/database');
+// src/services/accessService.js
+const { executeSQL } = require('../config/database');
 const QRCode = require('qrcode');
+const oracledb = require('oracledb');
 
 class AccessService {
   // 生成访问记录
@@ -7,8 +9,7 @@ class AccessService {
     let connection;
     try {
       connection = await oracledb.getConnection();
-      await connection.execute('BEGIN');
-
+      
       // 验证预订状态
       const bookingResult = await connection.execute(`
         SELECT 
@@ -85,7 +86,7 @@ class AccessService {
   // 验证SECRET NUMBER
   async verifySecretNumber(bookingId, secretNumber) {
     try {
-      const result = await executeQuery(`
+      const result = await executeSQL(`
         SELECT 
           b.booking_id,
           b.start_time,
@@ -144,7 +145,7 @@ class AccessService {
   // 获取访问记录
   async getAccessLogs(bookingId) {
     try {
-      const result = await executeQuery(`
+      const result = await executeSQL(`
         SELECT 
           al.access_log_id,
           al.booking_id,
@@ -168,7 +169,7 @@ class AccessService {
   // 检查未使用的预订
   async checkUnusedBookings() {
     try {
-      const result = await executeQuery(`
+      const result = await executeSQL(`
         SELECT 
           b.booking_id,
           b.employee_id,
@@ -198,7 +199,7 @@ class AccessService {
   // 更新员工锁定状态
   async updateEmployeeLockStatus(employeeId, isLocked) {
     try {
-      await executeQuery(`
+      await executeSQL(`
         UPDATE Employees
         SET is_locked = :isLocked,
             updated_at = CURRENT_TIMESTAMP

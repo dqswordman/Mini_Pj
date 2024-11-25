@@ -35,8 +35,11 @@
     "winston": "^3.11.0"
   },
   "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/preset-env": "^7.26.0",
     "@types/jest": "^29.5.11",
     "@types/supertest": "^6.0.2",
+    "babel-jest": "^29.7.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-jest": "^27.6.0",
@@ -48,5 +51,28 @@
   },
   "engines": {
     "node": ">=14.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "verbose": true,
+    "transform": {
+      "^.+\\.js$": "babel-jest"
+    },
+    "moduleFileExtensions": ["js", "json"],
+    "roots": ["<rootDir>/src", "<rootDir>/test"],
+    "testMatch": [
+      "**/__tests__/**/*.js",
+      "**/?(*.)+(spec|test).js"
+    ],
+    "setupFilesAfterEnv": ["<rootDir>/test/helpers/setup.js"],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/app.js",
+      "!src/config/*.js"
+    ],
+    "coverageDirectory": "coverage",
+    "clearMocks": true,
+    "resetMocks": true,
+    "restoreMocks": true
   }
 }
