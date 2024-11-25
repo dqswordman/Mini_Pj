@@ -82,13 +82,13 @@ class BookingController {
       const employeeId = req.params.userId || req.user.employeeId;
 
       // 检查访问权限
-      if (employeeId !== req.user.employeeId && 
-          !['Admin', 'Manager'].includes(req.user.position)) {
-        return res.status(STATUS_CODES.FORBIDDEN)
+      if (employeeId !== req.user.employeeId &&
+        !['Admin', 'Manager'].includes(req.user.position)) {
+        return res.status(STATUS_CODES.FORBIDDEN)  // 返回 403 Forbidden
           .json(errorResponse('Unauthorized to view these bookings', STATUS_CODES.FORBIDDEN));
       }
 
-      const bookings = await bookingService.getUserBookings(employeeId, status);
+      const bookings = await bookingService.getUserBookings(employeeId, status || null);
       res.json(successResponse(bookings));
     } catch (error) {
       res.status(STATUS_CODES.INTERNAL_ERROR)
@@ -145,14 +145,13 @@ class BookingController {
           .json(errorResponse('Approval decision and reason are required', STATUS_CODES.BAD_REQUEST));
       }
 
-      const updatedBooking = await bookingService.approveBooking(
+      const updatedBooking = await bookingService.approveBooking(  // 调用 bookingService.approveBooking 函数
         bookingId,
         approverId,
         isApproved,
         reason
       );
-
-      res.json(successResponse(updatedBooking, 
+      res.json(successResponse(updatedBooking,
         `Booking ${isApproved ? 'approved' : 'rejected'} successfully`));
     } catch (error) {
       if (error.message === 'Booking not found') {
@@ -162,6 +161,10 @@ class BookingController {
       if (error.message === 'Booking is not in pending status') {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Can only approve pending bookings', STATUS_CODES.BAD_REQUEST));
+      }
+      if (error.message === 'Unauthorized to approve bookings') {  // 添加错误处理
+        return res.status(STATUS_CODES.FORBIDDEN)
+          .json(errorResponse(error.message, STATUS_CODES.FORBIDDEN));
       }
       res.status(STATUS_CODES.INTERNAL_ERROR)
         .json(errorResponse('Failed to process approval', STATUS_CODES.INTERNAL_ERROR));

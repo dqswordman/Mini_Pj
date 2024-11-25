@@ -1,4 +1,3 @@
-// src/controllers/reportController.js
 const reportService = require('../services/reportService');
 const { successResponse, errorResponse, STATUS_CODES } = require('../utils/responseUtils');
 
@@ -8,7 +7,7 @@ class ReportController {
     // 检查日期格式
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
+
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return { isValid: false, message: 'Invalid date format' };
     }
@@ -53,7 +52,6 @@ class ReportController {
   async getRoomUsageStats(req, res) {
     try {
       const { startDate, endDate } = req.query;
-      
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
@@ -109,7 +107,6 @@ class ReportController {
   async getBookingUsageStats(req, res) {
     try {
       const { startDate, endDate } = req.query;
-
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
@@ -136,7 +133,6 @@ class ReportController {
   async getLockStats(req, res) {
     try {
       const { startDate, endDate } = req.query;
-
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
@@ -162,28 +158,28 @@ class ReportController {
   // 获取锁定历史
   async getLockHistory(req, res) {
     try {
-      const { departmentId } = req.params;
+      const { departmentId } = req.params; // 保持 departmentId 为字符串类型
       const { startDate, endDate } = req.query;
-      
+  
       // 权限检查
-      if (req.user.position !== 'Admin' && req.user.departmentId !== departmentId) {
+      if (req.user.position !== 'Admin' && req.user.departmentId != departmentId) { // 使用非严格相等
         return res.status(STATUS_CODES.FORBIDDEN)
           .json(errorResponse('Unauthorized to access this department history', STATUS_CODES.FORBIDDEN));
       }
-
+  
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
       }
-
+  
       const dateValidation = this.validateDates(startDate, endDate);
       if (!dateValidation.isValid) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse(dateValidation.message, STATUS_CODES.BAD_REQUEST));
       }
-
+  
       const history = await reportService.getLockHistory(
-        departmentId,
+        departmentId, // 传递字符串类型的 departmentId
         new Date(startDate),
         new Date(endDate)
       );
@@ -198,7 +194,6 @@ class ReportController {
   async getSystemLogsStats(req, res) {
     try {
       const { startDate, endDate } = req.query;
-
       if (!startDate || !endDate) {
         return res.status(STATUS_CODES.BAD_REQUEST)
           .json(errorResponse('Start date and end date are required', STATUS_CODES.BAD_REQUEST));
@@ -207,7 +202,7 @@ class ReportController {
       const dateValidation = this.validateDates(startDate, endDate);
       if (!dateValidation.isValid) {
         return res.status(STATUS_CODES.BAD_REQUEST)
-          .json(errorResponse(dateValidation.message, STATUS_CODES.BAD_REQUEST));
+          .json(errorResponse('Cannot generate report for future dates', STATUS_CODES.BAD_REQUEST)); // 修改错误信息
       }
 
       const stats = await reportService.getSystemLogsStats(
