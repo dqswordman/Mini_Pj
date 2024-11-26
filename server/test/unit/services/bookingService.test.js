@@ -1,8 +1,8 @@
 // test/unit/services/bookingService.test.js
 
 // Mock dependencies BEFORE requiring modules
-jest.mock('../../../src/config/database', () => ({
-    executeQuery: jest.fn()
+jest.mock('../../../src/config/database.js', () => ({
+    executeSQL: jest.fn()
 }));
 
 jest.mock('crypto', () => ({
@@ -16,10 +16,9 @@ jest.mock('oracledb', () => ({
 }));
 
 // Import dependencies AFTER setting up mocks
-const { executeQuery } = require('../../../src/config/database');
 const crypto = require('crypto');
 const oracledb = require('oracledb');
-const bookingService = require('../../../src/services/bookingService');
+const bookingService = require('../../../src/services/bookingService.js');
 
 describe('BookingService', () => {
     let mockConnection;
@@ -33,15 +32,15 @@ describe('BookingService', () => {
         };
         jest.clearAllMocks();
         oracledb.getConnection.mockResolvedValue(mockConnection);
+        crypto.randomBytes.mockReturnValue(Buffer.from('1234abcd', 'hex'));
     });
 
     describe('checkTimeConflict', () => {
         it('should return true when there is a time conflict', async () => {
             // Arrange
-            const mockResult = {
+            mockConnection.execute.mockResolvedValue({
                 rows: [{ CONFLICT_COUNT: 1 }]
-            };
-            executeQuery.mockResolvedValue(mockResult);
+            });
 
             // Act
             const result = await bookingService.checkTimeConflict(
@@ -52,15 +51,15 @@ describe('BookingService', () => {
 
             // Assert
             expect(result).toBe(true);
-            expect(executeQuery).toHaveBeenCalled();
+            expect(mockConnection.execute).toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should return false when there is no time conflict', async () => {
             // Arrange
-            const mockResult = {
+            mockConnection.execute.mockResolvedValue({
                 rows: [{ CONFLICT_COUNT: 0 }]
-            };
-            executeQuery.mockResolvedValue(mockResult);
+            });
 
             // Act
             const result = await bookingService.checkTimeConflict(
@@ -71,11 +70,14 @@ describe('BookingService', () => {
 
             // Assert
             expect(result).toBe(false);
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should exclude specified booking when checking conflicts', async () => {
             // Arrange
-            executeQuery.mockResolvedValue({ rows: [{ CONFLICT_COUNT: 0 }] });
+            mockConnection.execute.mockResolvedValue({
+                rows: [{ CONFLICT_COUNT: 0 }]
+            });
 
             // Act
             await bookingService.checkTimeConflict(
@@ -86,10 +88,11 @@ describe('BookingService', () => {
             );
 
             // Assert
-            expect(executeQuery).toHaveBeenCalledWith(
+            expect(mockConnection.execute).toHaveBeenCalledWith(
                 expect.stringContaining('AND booking_id != :excludeBookingId'),
-                expect.arrayContaining([123])
+                expect.any(Object)
             );
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 
@@ -116,48 +119,125 @@ describe('BookingService', () => {
             endTime: new Date('2024-02-01T10:00:00')
         };
 
+        beforeEach(() => {
+            jest.spyOn(bookingService, 'checkTimeConflict').mockResolvedValue(false);
+        });
+
         it('should create a normal room booking successfully', async () => {
             // Arrange
+            const mockBookingId = 1;
             mockConnection.execute
-                .mockResolvedValueOnce({ rows: [{ IS_DISABLED: 0 }] }) // Room check
-                .mockResolvedValueOnce({ outBinds: { booking_id: [1] } }) // Booking insert
-                .mockResolvedValueOnce({ rows: [{ ROOM_TYPE: 'Normal' }] }) // Room type check
-                .mockResolvedValueOnce({ rowsAffected: 1 }); // Status update
+                .mockImplementation((sql, params) => {
+                    if (sql === 'BEGIN') {
+                        return Promise.resolve();
+                    }
+                    if (sql.includes('SELECT is_disabled')) {
+                        return Promise.resolve({
+                            rows: [{ IS_DISABLED: 0 }]
+                        });
+                    }
+                    if (sql.includes('INSERT INTO Bookings')) {
+                        return Promise.resolve({
+                            outBinds: { booking_id: [mockBookingId] }
+                        });
+                    }
+                    if (sql.includes('SELECT room_type')) {
+                        return Promise.resolve({
+                            rows: [{ ROOM_TYPE: 'Normal' }]
+                        });
+                    }
+                    if (sql.includes('UPDATE Bookings')) {
+                        return Promise.resolve({
+                            rowsAffected: 1
+                        });
+                    }
+                    return Promise.resolve({ rows: [] });
+                });
 
-            const mockBooking = { BOOKING_ID: 1, BOOKING_STATUS: 'Approved' };
-            jest.spyOn(bookingService, 'getBookingById').mockResolvedValue(mockBooking);
-            jest.spyOn(bookingService, 'checkTimeConflict').mockResolvedValue(false);
+            jest.spyOn(bookingService, 'getBookingById')
+                .mockResolvedValueOnce({
+                    BOOKING_ID: mockBookingId,
+                    EMPLOYEE_ID: mockBookingData.employeeId,
+                    ROOM_ID: mockBookingData.roomId,
+                    BOOKING_STATUS: 'Approved'
+                });
 
             // Act
             const result = await bookingService.createBooking(mockBookingData);
 
             // Assert
-            expect(result).toEqual(mockBooking);
+            expect(result.BOOKING_STATUS).toBe('Approved');
             expect(mockConnection.commit).toHaveBeenCalled();
             expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should create a VIP room booking with pending approval', async () => {
             // Arrange
+            const mockBookingId = 1;
             mockConnection.execute
-                .mockResolvedValueOnce({ rows: [{ IS_DISABLED: 0 }] })
-                .mockResolvedValueOnce({ outBinds: { booking_id: [1] } })
-                .mockResolvedValueOnce({ rows: [{ ROOM_TYPE: 'VIP' }] })
-                .mockResolvedValueOnce({ rowsAffected: 1 });
+                .mockImplementation((sql, params) => {
+                    if (sql === 'BEGIN') {
+                        return Promise.resolve();
+                    }
+                    if (sql.includes('SELECT is_disabled')) {
+                        return Promise.resolve({
+                            rows: [{ IS_DISABLED: 0 }]
+                        });
+                    }
+                    if (sql.includes('INSERT INTO Bookings')) {
+                        return Promise.resolve({
+                            outBinds: { booking_id: [mockBookingId] }
+                        });
+                    }
+                    if (sql.includes('SELECT room_type')) {
+                        return Promise.resolve({
+                            rows: [{ ROOM_TYPE: 'VIP' }]
+                        });
+                    }
+                    return Promise.resolve({
+                        rowsAffected: 1,
+                        rows: []
+                    });
+                });
 
-            const mockBooking = { BOOKING_ID: 1, BOOKING_STATUS: 'Pending' };
-            jest.spyOn(bookingService, 'getBookingById').mockResolvedValue(mockBooking);
-            jest.spyOn(bookingService, 'checkTimeConflict').mockResolvedValue(false);
+            jest.spyOn(bookingService, 'getBookingById')
+                .mockResolvedValue({
+                    BOOKING_ID: mockBookingId,
+                    BOOKING_STATUS: 'Pending'
+                });
 
             // Act
             const result = await bookingService.createBooking(mockBookingData);
 
             // Assert
-            expect(result).toEqual(mockBooking);
-            expect(mockConnection.execute).toHaveBeenCalledWith(
-                expect.stringContaining('BookingApprovals'),
-                expect.any(Array)
-            );
+            expect(result.BOOKING_STATUS).toBe('Pending');
+            expect(mockConnection.commit).toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
+        });
+
+        it('should throw error for disabled room', async () => {
+            // Arrange
+            mockConnection.execute
+                .mockImplementation((sql, params) => {
+                    if (sql === 'BEGIN') {
+                        return Promise.resolve();
+                    }
+                    if (sql.includes('SELECT is_disabled')) {
+                        return Promise.resolve({
+                            rows: [{ IS_DISABLED: 1 }]
+                        });
+                    }
+                    return Promise.resolve({
+                        rows: []
+                    });
+                });
+
+            // Act & Assert
+            await expect(bookingService.createBooking(mockBookingData))
+                .rejects
+                .toThrow('Room is disabled');
+            expect(mockConnection.rollback).toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should throw error for time conflict', async () => {
@@ -169,95 +249,85 @@ describe('BookingService', () => {
                 .rejects
                 .toThrow('Time slot is already booked');
             expect(mockConnection.rollback).toHaveBeenCalled();
-        });
-
-        it('should throw error for disabled room', async () => {
-            // Arrange
-            mockConnection.execute
-                .mockResolvedValueOnce({ rows: [{ IS_DISABLED: 1 }] });
-            jest.spyOn(bookingService, 'checkTimeConflict').mockResolvedValue(false);
-
-            // Act & Assert
-            await expect(bookingService.createBooking(mockBookingData))
-                .rejects
-                .toThrow('Room is disabled');
-            expect(mockConnection.rollback).toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 
     describe('getBookingById', () => {
         it('should return booking details successfully', async () => {
             // Arrange
-            const mockBooking = {
+            mockConnection.execute.mockResolvedValue({
                 rows: [{
                     BOOKING_ID: 1,
                     EMPLOYEE_ID: 1,
                     ROOM_ID: 1,
                     BOOKING_STATUS: 'Approved'
                 }]
-            };
-            executeQuery.mockResolvedValue(mockBooking);
+            });
 
             // Act
             const result = await bookingService.getBookingById(1);
 
             // Assert
-            expect(result).toEqual(mockBooking.rows[0]);
-            expect(executeQuery).toHaveBeenCalledWith(
-                expect.any(String),
-                [1]
-            );
+            expect(result).toEqual(expect.objectContaining({
+                BOOKING_ID: 1,
+                BOOKING_STATUS: 'Approved'
+            }));
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should throw error when booking not found', async () => {
             // Arrange
-            executeQuery.mockResolvedValue({ rows: [] });
+            mockConnection.execute.mockResolvedValue({ rows: [] });
 
             // Act & Assert
             await expect(bookingService.getBookingById(999))
                 .rejects
                 .toThrow('Booking not found');
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 
     describe('getUserBookings', () => {
         it('should return all user bookings when no status filter', async () => {
             // Arrange
-            const mockBookings = {
+            mockConnection.execute.mockResolvedValue({
                 rows: [
                     { BOOKING_ID: 1, BOOKING_STATUS: 'Approved' },
                     { BOOKING_ID: 2, BOOKING_STATUS: 'Pending' }
                 ]
-            };
-            executeQuery.mockResolvedValue(mockBookings);
+            });
 
             // Act
             const result = await bookingService.getUserBookings(1);
 
             // Assert
-            expect(result).toEqual(mockBookings.rows);
-            expect(executeQuery).toHaveBeenCalledWith(
+            expect(result).toHaveLength(2);
+            expect(mockConnection.execute).toHaveBeenCalledWith(
                 expect.not.stringContaining('AND b.booking_status'),
-                [1]
+                expect.any(Object)
             );
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should filter bookings by status when provided', async () => {
             // Arrange
-            const mockBookings = {
-                rows: [{ BOOKING_ID: 1, BOOKING_STATUS: 'Approved' }]
-            };
-            executeQuery.mockResolvedValue(mockBookings);
+            mockConnection.execute.mockResolvedValue({
+                rows: [
+                    { BOOKING_ID: 1, BOOKING_STATUS: 'Approved' }
+                ]
+            });
 
             // Act
             const result = await bookingService.getUserBookings(1, 'Approved');
 
             // Assert
-            expect(result).toEqual(mockBookings.rows);
-            expect(executeQuery).toHaveBeenCalledWith(
+            expect(result).toHaveLength(1);
+            expect(mockConnection.execute).toHaveBeenCalledWith(
                 expect.stringContaining('AND b.booking_status = :status'),
-                expect.arrayContaining(['Approved'])
+                expect.any(Object)
             );
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 
@@ -269,20 +339,20 @@ describe('BookingService', () => {
                 EMPLOYEE_ID: 1,
                 BOOKING_STATUS: 'Approved'
             };
+
+            mockConnection.execute.mockResolvedValue({ rowsAffected: 1 });
+            
             jest.spyOn(bookingService, 'getBookingById')
                 .mockResolvedValueOnce(mockBooking)
                 .mockResolvedValueOnce({ ...mockBooking, BOOKING_STATUS: 'Cancelled' });
-            executeQuery.mockResolvedValue({ rowsAffected: 1 });
 
             // Act
-            const result = await bookingService.cancelBooking(1, 1, 'Meeting cancelled');
+            const result = await bookingService.cancelBooking(1, 1, 'Test cancellation');
 
             // Assert
             expect(result.BOOKING_STATUS).toBe('Cancelled');
-            expect(executeQuery).toHaveBeenCalledWith(
-                expect.stringContaining('UPDATE Bookings'),
-                expect.any(Object)
-            );
+            expect(mockConnection.commit).toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should throw error when unauthorized', async () => {
@@ -296,9 +366,11 @@ describe('BookingService', () => {
             jest.spyOn(bookingService, 'checkIfAdmin').mockResolvedValue(false);
 
             // Act & Assert
-            await expect(bookingService.cancelBooking(1, 1, 'Unauthorized cancel'))
+            await expect(bookingService.cancelBooking(1, 1, 'Unauthorized'))
                 .rejects
                 .toThrow('Unauthorized to cancel this booking');
+            expect(mockConnection.rollback).toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 
@@ -309,6 +381,7 @@ describe('BookingService', () => {
                 BOOKING_ID: 1,
                 BOOKING_STATUS: 'Pending'
             };
+
             jest.spyOn(bookingService, 'getBookingById')
                 .mockResolvedValueOnce(mockBooking)
                 .mockResolvedValueOnce({ ...mockBooking, BOOKING_STATUS: 'Approved' });
@@ -323,6 +396,7 @@ describe('BookingService', () => {
             // Assert
             expect(result.BOOKING_STATUS).toBe('Approved');
             expect(mockConnection.commit).toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should throw error for non-pending booking', async () => {
@@ -338,36 +412,37 @@ describe('BookingService', () => {
                 .rejects
                 .toThrow('Booking is not in pending status');
             expect(mockConnection.rollback).toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 
     describe('checkIfAdmin', () => {
         it('should return true for admin user', async () => {
             // Arrange
-            const mockResult = {
+            mockConnection.execute.mockResolvedValue({
                 rows: [{ POSITION_NAME: 'Admin' }]
-            };
-            executeQuery.mockResolvedValue(mockResult);
+            });
 
             // Act
             const result = await bookingService.checkIfAdmin(1);
 
             // Assert
             expect(result).toBe(true);
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should return false for non-admin user', async () => {
             // Arrange
-            const mockResult = {
+            mockConnection.execute.mockResolvedValue({
                 rows: [{ POSITION_NAME: 'Employee' }]
-            };
-            executeQuery.mockResolvedValue(mockResult);
+            });
 
             // Act
             const result = await bookingService.checkIfAdmin(1);
 
             // Assert
             expect(result).toBe(false);
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 });

@@ -1,6 +1,8 @@
+// src/services/authService.js
 const bcrypt = require('bcrypt');
-const { executeQuery } = require('../config/database');
-const { generateToken } = require('../utils/jwtUtils');
+const oracledb = require('oracledb');
+const { executeSQL } = require('../config/database.js');
+const { generateToken } = require('../utils/jwtUtils.js');
 
 class AuthService {
     async register(userData) {
@@ -11,7 +13,7 @@ class AuthService {
 
             // 检查邮箱是否已存在
             const checkEmail = await connection.execute(
-                `SELECT COUNT(*) AS count FROM Employees WHERE email = :email`,
+                `SELECT COUNT(*) AS COUNT FROM Employees WHERE email = :email`,
                 [userData.email]
             );
 
@@ -74,14 +76,21 @@ class AuthService {
             throw error;
         } finally {
             if (connection) {
-                await connection.close();
+                try {
+                    await connection.close();
+                } catch (err) {
+                    console.error('Error closing connection:', err);
+                }
             }
         }
     }
 
     async login(email, password) {
+        let connection;
         try {
-            const result = await executeQuery(
+            connection = await oracledb.getConnection();
+            
+            const result = await connection.execute(
                 `SELECT 
                     e.employee_id,
                     e.name,
@@ -128,12 +137,23 @@ class AuthService {
             };
         } catch (error) {
             throw error;
+        } finally {
+            if (connection) {
+                try {
+                    await connection.close();
+                } catch (err) {
+                    console.error('Error closing connection:', err);
+                }
+            }
         }
     }
 
     async getUserProfile(userId) {
+        let connection;
         try {
-            const result = await executeQuery(
+            connection = await oracledb.getConnection();
+            
+            const result = await connection.execute(
                 `SELECT 
                     e.employee_id,
                     e.name,
@@ -156,6 +176,14 @@ class AuthService {
             return result.rows[0];
         } catch (error) {
             throw error;
+        } finally {
+            if (connection) {
+                try {
+                    await connection.close();
+                } catch (err) {
+                    console.error('Error closing connection:', err);
+                }
+            }
         }
     }
 
@@ -163,6 +191,7 @@ class AuthService {
         let connection;
         try {
             connection = await oracledb.getConnection();
+            await connection.execute('BEGIN');
 
             const result = await connection.execute(
                 `SELECT password_hash 
@@ -206,7 +235,11 @@ class AuthService {
             throw error;
         } finally {
             if (connection) {
-                await connection.close();
+                try {
+                    await connection.close();
+                } catch (err) {
+                    console.error('Error closing connection:', err);
+                }
             }
         }
     }

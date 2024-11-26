@@ -51,28 +51,5 @@
   },
   "engines": {
     "node": ">=14.0.0"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "verbose": true,
-    "transform": {
-      "^.+\\.js$": "babel-jest"
-    },
-    "moduleFileExtensions": ["js", "json"],
-    "roots": ["<rootDir>/src", "<rootDir>/test"],
-    "testMatch": [
-      "**/__tests__/**/*.js",
-      "**/?(*.)+(spec|test).js"
-    ],
-    "setupFilesAfterEnv": ["<rootDir>/test/helpers/setup.js"],
-    "collectCoverageFrom": [
-      "src/**/*.js",
-      "!src/app.js",
-      "!src/config/*.js"
-    ],
-    "coverageDirectory": "coverage",
-    "clearMocks": true,
-    "resetMocks": true,
-    "restoreMocks": true
   }
 }
