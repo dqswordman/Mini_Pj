@@ -1,10 +1,14 @@
-const { executeQuery } = require('../config/database');
+// src/services/employeeService.js
 const bcrypt = require('bcrypt');
+const oracledb = require('oracledb');
 
 class EmployeeService {
   async getAllEmployees() {
+    let connection;
     try {
-      const result = await executeQuery(`
+      connection = await oracledb.getConnection();
+      
+      const result = await connection.execute(`
         SELECT 
           e.employee_id,
           e.name,
@@ -23,12 +27,23 @@ class EmployeeService {
       return result.rows;
     } catch (error) {
       throw error;
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (err) {
+          console.error('Error closing connection:', err);
+        }
+      }
     }
   }
 
   async getEmployeeById(employeeId) {
+    let connection;
     try {
-      const result = await executeQuery(`
+      connection = await oracledb.getConnection();
+      
+      const result = await connection.execute(`
         SELECT 
           e.employee_id,
           e.name,
@@ -53,6 +68,14 @@ class EmployeeService {
       return result.rows[0];
     } catch (error) {
       throw error;
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (err) {
+          console.error('Error closing connection:', err);
+        }
+      }
     }
   }
 
@@ -102,7 +125,7 @@ class EmployeeService {
       });
 
       await connection.commit();
-      return this.getEmployeeById(employeeId);
+      return await this.getEmployeeById(employeeId);
     } catch (error) {
       if (connection) {
         await connection.rollback();
@@ -113,7 +136,7 @@ class EmployeeService {
         try {
           await connection.close();
         } catch (err) {
-          console.error(err);
+          console.error('Error closing connection:', err);
         }
       }
     }
@@ -155,7 +178,7 @@ class EmployeeService {
       }
 
       await connection.commit();
-      return this.getEmployeeById(employeeId);
+      return await this.getEmployeeById(employeeId);
     } catch (error) {
       if (connection) {
         await connection.rollback();
@@ -166,7 +189,7 @@ class EmployeeService {
         try {
           await connection.close();
         } catch (err) {
-          console.error(err);
+          console.error('Error closing connection:', err);
         }
       }
     }
@@ -175,50 +198,52 @@ class EmployeeService {
   async deleteEmployee(employeeId) {
     let connection;
     try {
-      connection = await oracledb.getConnection();
-      // 检查是否可以删除（例如：检查是否有相关的预订记录等）
-      const bookingsResult = await connection.execute(`
-        SELECT COUNT(*) as count
-        FROM Bookings
-        WHERE employee_id = :employeeId
-      `, [employeeId]);
+        connection = await oracledb.getConnection();
+        
+        // 先检查是否可以删除
+        const bookingsResult = await connection.execute(`
+            SELECT COUNT(*) as count
+            FROM Bookings
+            WHERE employee_id = :employeeId
+        `, [employeeId]);
 
-      if (bookingsResult.rows[0][0] > 0) {
-        throw new Error('Cannot delete employee with existing bookings');
-      }
-
-      await connection.execute('BEGIN');
-
-      // 按顺序删除相关记录
-      await connection.execute(`
-        DELETE FROM UserCredentials WHERE employee_id = :employeeId
-      `, [employeeId]);
-
-      await connection.execute(`
-        DELETE FROM EmployeeDepartmentPositions WHERE employee_id = :employeeId
-      `, [employeeId]);
-
-      await connection.execute(`
-        DELETE FROM Employees WHERE employee_id = :employeeId
-      `, [employeeId]);
-
-      await connection.commit();
-      return { message: 'Employee deleted successfully' };
-    } catch (error) {
-      if (connection) {
-        await connection.rollback();
-      }
-      throw error;
-    } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch (err) {
-          console.error(err);
+        if (bookingsResult.rows[0][0] > 0) {
+            throw new Error('Cannot delete employee with existing bookings');
         }
-      }
+
+        // 开始事务
+        await connection.execute('BEGIN');
+
+        // 按顺序删除相关记录
+        await connection.execute(`
+            DELETE FROM UserCredentials WHERE employee_id = :employeeId
+        `, [employeeId]);
+
+        await connection.execute(`
+            DELETE FROM EmployeeDepartmentPositions WHERE employee_id = :employeeId
+        `, [employeeId]);
+
+        await connection.execute(`
+            DELETE FROM Employees WHERE employee_id = :employeeId
+        `, [employeeId]);
+
+        await connection.commit();
+        return { message: 'Employee deleted successfully' };
+    } catch (error) {
+        if (connection && error.message !== 'Cannot delete employee with existing bookings') {
+            await connection.rollback();
+        }
+        throw error;
+    } finally {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (err) {
+                console.error('Error closing connection:', err);
+            }
+        }
     }
-  }
+}
 }
 
 module.exports = new EmployeeService();

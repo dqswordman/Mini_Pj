@@ -1,3 +1,5 @@
+// src/services/lockService.js
+const oracledb = require('oracledb');
 const { executeQuery } = require('../config/database');
 
 class LockService {
@@ -69,7 +71,7 @@ class LockService {
         try {
           await connection.close();
         } catch (err) {
-          console.error(err);
+          console.error('Error closing connection:', err);
         }
       }
     }
@@ -117,7 +119,7 @@ class LockService {
         try {
           await connection.close();
         } catch (err) {
-          console.error(err);
+          console.error('Error closing connection:', err);
         }
       }
     }
@@ -178,82 +180,82 @@ class LockService {
   async autoCheckAndLock() {
     let connection;
     try {
-      connection = await oracledb.getConnection();
-      await connection.execute('BEGIN');
+        connection = await oracledb.getConnection();
+        await connection.execute('BEGIN');
 
-      // 获取需要锁定的员工
-      const result = await connection.execute(`
-        WITH UnusedBookings AS (
-          SELECT 
-            b.employee_id,
-            COUNT(*) as unused_count
-          FROM Bookings b
-          WHERE b.booking_status = 'Approved'
-          AND b.end_time < CURRENT_TIMESTAMP
-          AND b.end_time > CURRENT_TIMESTAMP - INTERVAL '30' DAY
-          AND NOT EXISTS (
-            SELECT 1 
-            FROM RoomAccessLog al 
-            WHERE al.booking_id = b.booking_id
-          )
-          GROUP BY b.employee_id
-          HAVING COUNT(*) >= 3
-        )
-        SELECT 
-          ub.employee_id,
-          ub.unused_count,
-          e.name as employee_name
-        FROM UnusedBookings ub
-        JOIN Employees e ON ub.employee_id = e.employee_id
-        WHERE e.is_locked = 0
-      `);
+        // 获取需要锁定的员工
+        const result = await connection.execute(`
+            WITH UnusedBookings AS (
+                SELECT 
+                    b.employee_id,
+                    COUNT(*) as unused_count
+                FROM Bookings b
+                WHERE b.booking_status = 'Approved'
+                AND b.end_time < CURRENT_TIMESTAMP
+                AND b.end_time > CURRENT_TIMESTAMP - INTERVAL '30' DAY
+                AND NOT EXISTS (
+                    SELECT 1 
+                    FROM RoomAccessLog al 
+                    WHERE al.booking_id = b.booking_id
+                )
+                GROUP BY b.employee_id
+                HAVING COUNT(*) >= 3
+            )
+            SELECT 
+                ub.employee_id,
+                ub.unused_count,
+                e.name as employee_name
+            FROM UnusedBookings ub
+            JOIN Employees e ON ub.employee_id = e.employee_id
+            WHERE e.is_locked = 0
+        `);
 
-      const employeesToLock = result.rows;
+        const employeesToLock = result.rows || [];
 
-      // 锁定员工
-      for (const emp of employeesToLock) {
-        await connection.execute(`
-          UPDATE Employees
-          SET is_locked = 1,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE employee_id = :employeeId
-        `, [emp.EMPLOYEE_ID]);
+        // 锁定员工
+        for (const emp of employeesToLock) {
+            await connection.execute(`
+                UPDATE Employees
+                SET is_locked = 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE employee_id = :employeeId
+            `, [emp.EMPLOYEE_ID]);
 
-        await connection.execute(`
-          INSERT INTO UnlockRequests (
-            employee_id,
-            request_time,
-            approval_status,
-            approval_reason
-          ) VALUES (
-            :employeeId,
-            CURRENT_TIMESTAMP,
-            'Pending',
-            :reason
-          )
-        `, {
-          employeeId: emp.EMPLOYEE_ID,
-          reason: `Automatically locked due to ${emp.UNUSED_COUNT} unused bookings in 30 days`
-        });
-      }
-
-      await connection.commit();
-      return employeesToLock;
-    } catch (error) {
-      if (connection) {
-        await connection.rollback();
-      }
-      throw error;
-    } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch (err) {
-          console.error(err);
+            await connection.execute(`
+                INSERT INTO UnlockRequests (
+                    employee_id,
+                    request_time,
+                    approval_status,
+                    approval_reason
+                ) VALUES (
+                    :employeeId,
+                    CURRENT_TIMESTAMP,
+                    'Pending',
+                    :reason
+                )
+            `, {
+                employeeId: emp.EMPLOYEE_ID,
+                reason: `Automatically locked due to ${emp.UNUSED_COUNT} unused bookings in 30 days`
+            });
         }
-      }
+
+        await connection.commit();
+        return employeesToLock;
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        throw error;
+    } finally {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (err) {
+                console.error('Error closing connection:', err);
+            }
+        }
     }
-  }
+}
 }
 
 module.exports = new LockService();

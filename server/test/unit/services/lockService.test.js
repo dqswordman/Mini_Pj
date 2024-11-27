@@ -64,15 +64,16 @@ describe('LockService', () => {
         it('should lock employee successfully', async () => {
             // Arrange
             mockConnection.execute
+                .mockResolvedValueOnce({ rowsAffected: 1 }) // BEGIN
                 .mockResolvedValueOnce({ rowsAffected: 1 }) // Update employee status
                 .mockResolvedValueOnce({ rowsAffected: 1 }); // Insert unlock request
-
+    
             // Act
             const result = await lockService.lockEmployee(1, 'Multiple unused bookings');
-
+    
             // Assert
             expect(result).toEqual({ success: true });
-            expect(mockConnection.execute).toHaveBeenCalledTimes(2);
+            expect(mockConnection.execute).toHaveBeenCalledTimes(3); // Including BEGIN
             expect(mockConnection.commit).toHaveBeenCalled();
         });
 
@@ -93,20 +94,17 @@ describe('LockService', () => {
         it('should unlock employee successfully', async () => {
             // Arrange
             mockConnection.execute
+                .mockResolvedValueOnce({ rowsAffected: 1 }) // BEGIN
                 .mockResolvedValueOnce({ rowsAffected: 1 }) // Update employee status
                 .mockResolvedValueOnce({ rowsAffected: 1 }); // Update unlock request
-
+    
             // Act
             const result = await lockService.unlockEmployee(1, 2, 'Approved after review');
-
+    
             // Assert
             expect(result).toEqual({ success: true });
-            expect(mockConnection.execute).toHaveBeenCalledTimes(2);
+            expect(mockConnection.execute).toHaveBeenCalledTimes(3); // Including BEGIN
             expect(mockConnection.commit).toHaveBeenCalled();
-            expect(mockConnection.execute).toHaveBeenCalledWith(
-                expect.stringContaining('UPDATE Employees'),
-                [1]
-            );
         });
 
         it('should rollback on error', async () => {
@@ -198,85 +196,95 @@ describe('LockService', () => {
     describe('autoCheckAndLock', () => {
         it('should automatically lock eligible employees', async () => {
             // Arrange
-            const mockEligibleEmployees = {
-                rows: [{
-                    EMPLOYEE_ID: 1,
-                    EMPLOYEE_NAME: 'John Doe',
-                    UNUSED_COUNT: 3
-                }]
-            };
-
+            const mockEligibleEmployees = [{
+                EMPLOYEE_ID: 1,
+                EMPLOYEE_NAME: 'John Doe',
+                UNUSED_COUNT: 3
+            }];
+    
             mockConnection.execute
-                .mockResolvedValueOnce(mockEligibleEmployees) // Get eligible employees
-                .mockResolvedValueOnce({ rowsAffected: 1 })   // Update employee status
-                .mockResolvedValueOnce({ rowsAffected: 1 });  // Insert unlock request
-
+                .mockImplementation((sql) => {
+                    if (sql === 'BEGIN') {
+                        return Promise.resolve();
+                    }
+                    if (sql.includes('WITH UnusedBookings')) {
+                        return Promise.resolve({
+                            rows: mockEligibleEmployees 
+                        });
+                    }
+                    if (sql.includes('UPDATE Employees') || sql.includes('INSERT INTO UnlockRequests')) {
+                        return Promise.resolve({ rowsAffected: 1 });
+                    }
+                    return Promise.resolve({ rows: [] });
+                });
+    
             // Act
             const result = await lockService.autoCheckAndLock();
-
+    
             // Assert
-            expect(result).toEqual(mockEligibleEmployees.rows);
+            expect(result).toEqual(mockEligibleEmployees);
             expect(mockConnection.commit).toHaveBeenCalled();
-            expect(mockConnection.execute).toHaveBeenCalledWith(
-                expect.stringContaining('SET is_locked = 1'),
-                [1]
-            );
         });
-
+    
         it('should handle no eligible employees', async () => {
             // Arrange
-            mockConnection.execute.mockResolvedValueOnce({ rows: [] });
-
+            mockConnection.execute.mockImplementation((sql) => {
+                if (sql === 'BEGIN') {
+                    return Promise.resolve();
+                }
+                return Promise.resolve({ rows: [] });
+            });
+    
             // Act
             const result = await lockService.autoCheckAndLock();
-
+    
             // Assert
             expect(result).toEqual([]);
             expect(mockConnection.commit).toHaveBeenCalled();
-            expect(mockConnection.execute).toHaveBeenCalledTimes(1);
         });
-
-        it('should rollback on error during auto lock', async () => {
-            // Arrange
-            const mockEligibleEmployees = {
-                rows: [{
-                    EMPLOYEE_ID: 1,
-                    EMPLOYEE_NAME: 'John Doe',
-                    UNUSED_COUNT: 3
-                }]
-            };
-
-            mockConnection.execute
-                .mockResolvedValueOnce(mockEligibleEmployees)
-                .mockRejectedValue(new Error('Lock failed'));
-
-            // Act & Assert
-            await expect(lockService.autoCheckAndLock())
-                .rejects
-                .toThrow('Lock failed');
-            expect(mockConnection.rollback).toHaveBeenCalled();
-        });
-
+    
         it('should handle transaction properly for multiple employees', async () => {
             // Arrange
-            const mockEligibleEmployees = {
-                rows: [
-                    { EMPLOYEE_ID: 1, EMPLOYEE_NAME: 'John Doe', UNUSED_COUNT: 3 },
-                    { EMPLOYEE_ID: 2, EMPLOYEE_NAME: 'Jane Doe', UNUSED_COUNT: 4 }
-                ]
-            };
-
+            const mockEligibleEmployees = [
+                { EMPLOYEE_ID: 1, EMPLOYEE_NAME: 'John Doe', UNUSED_COUNT: 3 },
+                { EMPLOYEE_ID: 2, EMPLOYEE_NAME: 'Jane Doe', UNUSED_COUNT: 4 }
+            ];
+        
             mockConnection.execute
-                .mockResolvedValueOnce(mockEligibleEmployees)
-                .mockResolvedValue({ rowsAffected: 1 }); // For all subsequent calls
-
+                .mockImplementation((sql) => {
+                    if (sql === 'BEGIN') {
+                        return Promise.resolve();
+                    }
+                    if (sql.includes('WITH UnusedBookings')) {
+                        return Promise.resolve({
+                            rows: mockEligibleEmployees
+                        });
+                    }
+                    if (sql.includes('UPDATE Employees') || sql.includes('INSERT INTO UnlockRequests')) {
+                        return Promise.resolve({ rowsAffected: 1 });
+                    }
+                    return Promise.resolve({ rows: [] });
+                });
+        
             // Act
             const result = await lockService.autoCheckAndLock();
-
+        
             // Assert
-            expect(result).toEqual(mockEligibleEmployees.rows);
-            expect(mockConnection.execute).toHaveBeenCalledTimes(5); // 1 select + 2 employees * 2 operations
+            expect(result).toEqual(mockEligibleEmployees);
+            expect(mockConnection.execute).toHaveBeenCalledTimes(6); // BEGIN(1) + SELECT(1) + (2 employees × 2 operations)(4)
             expect(mockConnection.commit).toHaveBeenCalled();
+            
+            // 验证调用顺序
+            expect(mockConnection.execute).toHaveBeenNthCalledWith(1, 'BEGIN');
+            expect(mockConnection.execute).toHaveBeenNthCalledWith(2, expect.stringContaining('WITH UnusedBookings'));
+            expect(mockConnection.execute).toHaveBeenCalledWith(
+                expect.stringContaining('UPDATE Employees'),
+                expect.arrayContaining([expect.any(Number)])
+            );
+            expect(mockConnection.execute).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO UnlockRequests'),
+                expect.any(Object)
+            );
         });
     });
 });

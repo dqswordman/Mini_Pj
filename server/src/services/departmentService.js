@@ -66,21 +66,21 @@ class DepartmentService {
 
   async createDepartment(departmentData) {
     try {
-      const result = await executeQuery(`
-        INSERT INTO Departments (department_name) 
-        VALUES (:departmentName)
-        RETURNING department_id INTO :department_id
-      `, {
-        departmentName: departmentData.departmentName,
-        department_id: { type: oracledb.NUMBER, dir: oracledb.BIND_OUT }
-      });
+        const result = await executeQuery(`
+            INSERT INTO Departments (department_name) 
+            VALUES (:departmentName)
+            RETURNING department_id INTO :department_id
+        `, {
+            departmentName: departmentData.departmentName,
+            department_id: { dir: 'out' }
+        });
 
-      const departmentId = result.outBinds.department_id[0];
-      return this.getDepartmentById(departmentId);
+        const departmentId = result.outBinds.department_id[0];
+        return this.getDepartmentById(departmentId);
     } catch (error) {
-      throw error;
+        throw error;
     }
-  }
+}
 
   async updateDepartment(departmentId, departmentData) {
     try {

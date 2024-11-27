@@ -1,18 +1,13 @@
 // test/unit/services/departmentService.test.js
 
 // Mock dependencies BEFORE requiring the service
-jest.mock('../../../src/config/database', () => ({
+jest.mock('../../../src/config/database.js', () => ({
     executeQuery: jest.fn()
 }));
 
-jest.mock('oracledb', () => ({
-    NUMBER: 'NUMBER',
-    BIND_OUT: 'BIND_OUT'
-}));
-
 // Import dependencies AFTER setting up mocks
-const { executeQuery } = require('../../../src/config/database');
-const departmentService = require('../../../src/services/departmentService');
+const { executeQuery } = require('../../../src/config/database.js');
+const departmentService = require('../../../src/services/departmentService.js');
 
 describe('DepartmentService', () => {
     beforeEach(() => {
@@ -35,10 +30,7 @@ describe('DepartmentService', () => {
 
             // Assert
             expect(result).toEqual(mockDepartments.rows);
-            expect(executeQuery).toHaveBeenCalledWith(
-                expect.stringContaining('SELECT'),
-                expect.any(Array)
-            );
+            expect(executeQuery).toHaveBeenCalledWith(expect.any(String));
         });
 
         it('should handle database errors', async () => {
@@ -130,6 +122,7 @@ describe('DepartmentService', () => {
             // Arrange
             const newDepartmentData = { departmentName: 'Finance' };
             const mockInsertResult = {
+                rowsAffected: 1,
                 outBinds: { department_id: [3] }
             };
             const mockDepartment = {

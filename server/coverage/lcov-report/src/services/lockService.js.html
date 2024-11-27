@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/59</span>
+                <span class='fraction'>0/60</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/13</span>
+                <span class='fraction'>0/15</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/59</span>
+                <span class='fraction'>0/60</span>
             </div>
         
             
@@ -321,7 +321,11 @@
 <a name='L256'></a><a href='#L256'>256</a>
 <a name='L257'></a><a href='#L257'>257</a>
 <a name='L258'></a><a href='#L258'>258</a>
-<a name='L259'></a><a href='#L259'>259</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -579,7 +583,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const { executeQuery } = <span class="cstat-no" title="statement not covered" >require('../config/database');</span>
+<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// src/services/lockService.js
+const oracledb = <span class="cstat-no" title="statement not covered" >require('oracledb');</span>
+const { executeQuery } = <span class="cstat-no" title="statement not covered" >require('../config/database');</span>
 &nbsp;
 class LockService {
   // 检查员工未使用预订次数
@@ -650,7 +656,7 @@ class LockService {
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          await connection.close();</span>
         } catch (err) {
-<span class="cstat-no" title="statement not covered" >          console.error(err);</span>
+<span class="cstat-no" title="statement not covered" >          console.error('Error closing connection:', err);</span>
         }
       }
     }
@@ -698,7 +704,7 @@ class LockService {
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          await connection.close();</span>
         } catch (err) {
-<span class="cstat-no" title="statement not covered" >          console.error(err);</span>
+<span class="cstat-no" title="statement not covered" >          console.error('Error closing connection:', err);</span>
         }
       }
     }
@@ -759,82 +765,82 @@ class LockService {
 <span class="fstat-no" title="function not covered" >  as</span>ync autoCheckAndLock() {
     let connection;
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >      connection = await oracledb.getConnection();</span>
-<span class="cstat-no" title="statement not covered" >      await connection.execute('BEGIN');</span>
+<span class="cstat-no" title="statement not covered" >        connection = await oracledb.getConnection();</span>
+<span class="cstat-no" title="statement not covered" >        await connection.execute('BEGIN');</span>
 &nbsp;
-      // 获取需要锁定的员工
-      const result = <span class="cstat-no" title="statement not covered" >await connection.execute(`</span>
-        WITH UnusedBookings AS (
-          SELECT 
-            b.employee_id,
-            COUNT(*) as unused_count
-          FROM Bookings b
-          WHERE b.booking_status = 'Approved'
-          AND b.end_time &lt; CURRENT_TIMESTAMP
-          AND b.end_time &gt; CURRENT_TIMESTAMP - INTERVAL '30' DAY
-          AND NOT EXISTS (
-            SELECT 1 
-            FROM RoomAccessLog al 
-            WHERE al.booking_id = b.booking_id
-          )
-          GROUP BY b.employee_id
-          HAVING COUNT(*) &gt;= 3
-        )
-        SELECT 
-          ub.employee_id,
-          ub.unused_count,
-          e.name as employee_name
-        FROM UnusedBookings ub
-        JOIN Employees e ON ub.employee_id = e.employee_id
-        WHERE e.is_locked = 0
-      `);
+        // 获取需要锁定的员工
+        const result = <span class="cstat-no" title="statement not covered" >await connection.execute(`</span>
+            WITH UnusedBookings AS (
+                SELECT 
+                    b.employee_id,
+                    COUNT(*) as unused_count
+                FROM Bookings b
+                WHERE b.booking_status = 'Approved'
+                AND b.end_time &lt; CURRENT_TIMESTAMP
+                AND b.end_time &gt; CURRENT_TIMESTAMP - INTERVAL '30' DAY
+                AND NOT EXISTS (
+                    SELECT 1 
+                    FROM RoomAccessLog al 
+                    WHERE al.booking_id = b.booking_id
+                )
+                GROUP BY b.employee_id
+                HAVING COUNT(*) &gt;= 3
+            )
+            SELECT 
+                ub.employee_id,
+                ub.unused_count,
+                e.name as employee_name
+            FROM UnusedBookings ub
+            JOIN Employees e ON ub.employee_id = e.employee_id
+            WHERE e.is_locked = 0
+        `);
 &nbsp;
-      const employeesToLock = <span class="cstat-no" title="statement not covered" >result.rows;</span>
+        const employeesToLock = <span class="cstat-no" title="statement not covered" >result.rows || [];</span>
 &nbsp;
-      // 锁定员工
-<span class="cstat-no" title="statement not covered" >      for (const emp of employeesToLock) {</span>
-<span class="cstat-no" title="statement not covered" >        await connection.execute(`</span>
-          UPDATE Employees
-          SET is_locked = 1,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE employee_id = :employeeId
-        `, [emp.EMPLOYEE_ID]);
+        // 锁定员工
+<span class="cstat-no" title="statement not covered" >        for (const emp of employeesToLock) {</span>
+<span class="cstat-no" title="statement not covered" >            await connection.execute(`</span>
+                UPDATE Employees
+                SET is_locked = 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE employee_id = :employeeId
+            `, [emp.EMPLOYEE_ID]);
 &nbsp;
-<span class="cstat-no" title="statement not covered" >        await connection.execute(`</span>
-          INSERT INTO UnlockRequests (
-            employee_id,
-            request_time,
-            approval_status,
-            approval_reason
-          ) VALUES (
-            :employeeId,
-            CURRENT_TIMESTAMP,
-            'Pending',
-            :reason
-          )
-        `, {
-          employeeId: emp.EMPLOYEE_ID,
-          reason: `Automatically locked due to ${emp.UNUSED_COUNT} unused bookings in 30 days`
-        });
-      }
-&nbsp;
-<span class="cstat-no" title="statement not covered" >      await connection.commit();</span>
-<span class="cstat-no" title="statement not covered" >      return employeesToLock;</span>
-    } catch (error) {
-<span class="cstat-no" title="statement not covered" >      if (connection) {</span>
-<span class="cstat-no" title="statement not covered" >        await connection.rollback();</span>
-      }
-<span class="cstat-no" title="statement not covered" >      throw error;</span>
-    } finally {
-<span class="cstat-no" title="statement not covered" >      if (connection) {</span>
-<span class="cstat-no" title="statement not covered" >        try {</span>
-<span class="cstat-no" title="statement not covered" >          await connection.close();</span>
-        } catch (err) {
-<span class="cstat-no" title="statement not covered" >          console.error(err);</span>
+<span class="cstat-no" title="statement not covered" >            await connection.execute(`</span>
+                INSERT INTO UnlockRequests (
+                    employee_id,
+                    request_time,
+                    approval_status,
+                    approval_reason
+                ) VALUES (
+                    :employeeId,
+                    CURRENT_TIMESTAMP,
+                    'Pending',
+                    :reason
+                )
+            `, {
+                employeeId: emp.EMPLOYEE_ID,
+                reason: `Automatically locked due to ${emp.UNUSED_COUNT} unused bookings in 30 days`
+            });
         }
-      }
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        await connection.commit();</span>
+<span class="cstat-no" title="statement not covered" >        return employeesToLock;</span>
+    } catch (error) {
+<span class="cstat-no" title="statement not covered" >        if (connection) {</span>
+<span class="cstat-no" title="statement not covered" >            await connection.rollback();</span>
+        }
+<span class="cstat-no" title="statement not covered" >        throw error;</span>
+    } finally {
+<span class="cstat-no" title="statement not covered" >        if (connection) {</span>
+<span class="cstat-no" title="statement not covered" >            try {</span>
+<span class="cstat-no" title="statement not covered" >                await connection.close();</span>
+            } catch (err) {
+<span class="cstat-no" title="statement not covered" >                console.error('Error closing connection:', err);</span>
+            }
+        }
     }
-  }
+}
 }
 &nbsp;
 <span class="cstat-no" title="statement not covered" >module.exports = new LockService();</span></pre></td></tr></table></pre>
@@ -844,7 +850,7 @@ class LockService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2024-11-26T16:58:44.109Z
+                at 2024-11-27T06:19:18.676Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

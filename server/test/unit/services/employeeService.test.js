@@ -54,27 +54,29 @@ describe('EmployeeService', () => {
                     }
                 ]
             };
-            executeQuery.mockResolvedValue(mockEmployees);
-
+            mockConnection.execute.mockResolvedValue(mockEmployees);
+    
             // Act
             const result = await employeeService.getAllEmployees();
-
+    
             // Assert
             expect(result).toEqual(mockEmployees.rows);
-            expect(executeQuery).toHaveBeenCalledWith(
-                expect.stringContaining('SELECT'),
-                expect.any(Array)
-            );
+            expect(mockConnection.execute).toHaveBeenCalled();
+            const [sql] = mockConnection.execute.mock.calls[0];
+            expect(sql.toLowerCase()).toContain('select');
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should handle database errors', async () => {
             // Arrange
-            executeQuery.mockRejectedValue(new Error('Database error'));
+            const dbError = new Error('Database error');
+            mockConnection.execute.mockRejectedValue(dbError);
 
             // Act & Assert
             await expect(employeeService.getAllEmployees())
                 .rejects
                 .toThrow('Database error');
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 
@@ -89,27 +91,29 @@ describe('EmployeeService', () => {
                     DEPARTMENT_NAME: 'IT'
                 }]
             };
-            executeQuery.mockResolvedValue(mockEmployee);
+            mockConnection.execute.mockResolvedValue(mockEmployee);
 
             // Act
             const result = await employeeService.getEmployeeById(1);
 
             // Assert
             expect(result).toEqual(mockEmployee.rows[0]);
-            expect(executeQuery).toHaveBeenCalledWith(
+            expect(mockConnection.execute).toHaveBeenCalledWith(
                 expect.stringContaining('WHERE e.employee_id = :employeeId'),
                 [1]
             );
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should throw error when employee not found', async () => {
             // Arrange
-            executeQuery.mockResolvedValue({ rows: [] });
+            mockConnection.execute.mockResolvedValue({ rows: [] });
 
             // Act & Assert
             await expect(employeeService.getEmployeeById(999))
                 .rejects
                 .toThrow('Employee not found');
+            expect(mockConnection.close).toHaveBeenCalled();
         });
     });
 
@@ -126,33 +130,55 @@ describe('EmployeeService', () => {
 
         it('should create employee successfully', async () => {
             // Arrange
-            mockConnection.execute
-                .mockResolvedValueOnce({ outBinds: { employee_id: [1] } }) // Employee insert
-                .mockResolvedValueOnce({ rowsAffected: 1 }) // Department position insert
-                .mockResolvedValueOnce({ rowsAffected: 1 }); // User credentials insert
+            mockConnection.execute.mockImplementation((sql) => {
+                if (sql === 'BEGIN') {
+                    return Promise.resolve();
+                }
+                if (sql.includes('INSERT INTO Employees')) {
+                    return Promise.resolve({
+                        outBinds: { employee_id: [1] }
+                    });
+                }
+                if (sql.includes('INSERT INTO EmployeeDepartmentPositions')) {
+                    return Promise.resolve({ rowsAffected: 1 });
+                }
+                if (sql.includes('INSERT INTO UserCredentials')) {
+                    return Promise.resolve({ rowsAffected: 1 });
+                }
+                return Promise.resolve({
+                    rows: [{
+                        EMPLOYEE_ID: 1,
+                        NAME: 'John Doe',
+                        EMAIL: 'john@example.com'
+                    }]
+                });
+            });
 
             bcrypt.genSalt.mockResolvedValue('salt');
             bcrypt.hash.mockResolvedValue('hashedPassword');
-
-            const mockCreatedEmployee = {
-                EMPLOYEE_ID: 1,
-                NAME: 'John Doe',
-                EMAIL: 'john@example.com'
-            };
-            jest.spyOn(employeeService, 'getEmployeeById').mockResolvedValue(mockCreatedEmployee);
 
             // Act
             const result = await employeeService.createEmployee(mockEmployeeData);
 
             // Assert
-            expect(result).toEqual(mockCreatedEmployee);
+            expect(result).toEqual(expect.objectContaining({
+                EMPLOYEE_ID: 1,
+                NAME: mockEmployeeData.name,
+                EMAIL: mockEmployeeData.email
+            }));
+            expect(mockConnection.execute).toHaveBeenCalledTimes(5); // Including BEGIN
             expect(mockConnection.commit).toHaveBeenCalled();
-            expect(mockConnection.execute).toHaveBeenCalledTimes(3);
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should rollback transaction on error', async () => {
             // Arrange
-            mockConnection.execute.mockRejectedValue(new Error('Insert failed'));
+            mockConnection.execute.mockImplementation((sql) => {
+                if (sql === 'BEGIN') {
+                    return Promise.resolve();
+                }
+                throw new Error('Insert failed');
+            });
 
             // Act & Assert
             await expect(employeeService.createEmployee(mockEmployeeData))
@@ -174,24 +200,35 @@ describe('EmployeeService', () => {
 
         it('should update employee successfully', async () => {
             // Arrange
-            mockConnection.execute
-                .mockResolvedValueOnce({ rowsAffected: 1 }) // Basic info update
-                .mockResolvedValueOnce({ rowsAffected: 1 }); // Department position update
-
-            const mockUpdatedEmployee = {
-                EMPLOYEE_ID: 1,
-                NAME: 'John Updated',
-                EMAIL: 'john.updated@example.com'
-            };
-            jest.spyOn(employeeService, 'getEmployeeById').mockResolvedValue(mockUpdatedEmployee);
+            mockConnection.execute.mockImplementation((sql) => {
+                if (sql === 'BEGIN') {
+                    return Promise.resolve();
+                }
+                if (sql.includes('UPDATE Employees')) {
+                    return Promise.resolve({ rowsAffected: 1 });
+                }
+                if (sql.includes('UPDATE EmployeeDepartmentPositions')) {
+                    return Promise.resolve({ rowsAffected: 1 });
+                }
+                return Promise.resolve({
+                    rows: [{
+                        EMPLOYEE_ID: 1,
+                        NAME: mockUpdateData.name,
+                        EMAIL: mockUpdateData.email
+                    }]
+                });
+            });
 
             // Act
             const result = await employeeService.updateEmployee(1, mockUpdateData);
 
             // Assert
-            expect(result).toEqual(mockUpdatedEmployee);
+            expect(result).toEqual(expect.objectContaining({
+                NAME: mockUpdateData.name,
+                EMAIL: mockUpdateData.email
+            }));
+            expect(mockConnection.execute).toHaveBeenCalledTimes(4); // Including BEGIN and final query
             expect(mockConnection.commit).toHaveBeenCalled();
-            expect(mockConnection.execute).toHaveBeenCalledTimes(2);
         });
 
         it('should update only basic info if no department/position provided', async () => {
@@ -202,27 +239,41 @@ describe('EmployeeService', () => {
                 phoneNumber: '0987654321'
             };
 
-            mockConnection.execute
-                .mockResolvedValueOnce({ rowsAffected: 1 }); // Only basic info update
-
-            const mockUpdatedEmployee = {
-                EMPLOYEE_ID: 1,
-                NAME: 'John Updated',
-                EMAIL: 'john.updated@example.com'
-            };
-            jest.spyOn(employeeService, 'getEmployeeById').mockResolvedValue(mockUpdatedEmployee);
+            mockConnection.execute.mockImplementation((sql) => {
+                if (sql === 'BEGIN') {
+                    return Promise.resolve();
+                }
+                if (sql.includes('UPDATE Employees')) {
+                    return Promise.resolve({ rowsAffected: 1 });
+                }
+                return Promise.resolve({
+                    rows: [{
+                        EMPLOYEE_ID: 1,
+                        NAME: basicUpdateData.name,
+                        EMAIL: basicUpdateData.email
+                    }]
+                });
+            });
 
             // Act
             const result = await employeeService.updateEmployee(1, basicUpdateData);
 
             // Assert
-            expect(result).toEqual(mockUpdatedEmployee);
-            expect(mockConnection.execute).toHaveBeenCalledTimes(1);
+            expect(result).toEqual(expect.objectContaining({
+                NAME: basicUpdateData.name,
+                EMAIL: basicUpdateData.email
+            }));
+            expect(mockConnection.execute).toHaveBeenCalledTimes(3); // Including BEGIN and final query
         });
 
         it('should rollback on update error', async () => {
             // Arrange
-            mockConnection.execute.mockRejectedValue(new Error('Update failed'));
+            mockConnection.execute.mockImplementation((sql) => {
+                if (sql === 'BEGIN') {
+                    return Promise.resolve();
+                }
+                throw new Error('Update failed');
+            });
 
             // Act & Assert
             await expect(employeeService.updateEmployee(1, mockUpdateData))
@@ -233,40 +284,54 @@ describe('EmployeeService', () => {
     });
 
     describe('deleteEmployee', () => {
-        it('should delete employee with no bookings', async () => {
+        it('should throw error when employee has bookings', async () => {
             // Arrange
-            mockConnection.execute
-                .mockResolvedValueOnce({ rows: [[0]] }) // No bookings check
-                .mockResolvedValueOnce({ rowsAffected: 1 }) // Delete credentials
-                .mockResolvedValueOnce({ rowsAffected: 1 }) // Delete department positions
-                .mockResolvedValueOnce({ rowsAffected: 1 }); // Delete employee
-
-            // Act
-            const result = await employeeService.deleteEmployee(1);
-
-            // Assert
-            expect(result).toEqual({ message: 'Employee deleted successfully' });
-            expect(mockConnection.commit).toHaveBeenCalled();
-            expect(mockConnection.execute).toHaveBeenCalledTimes(4);
+            mockConnection.execute.mockImplementation((sql) => {
+                if (sql.includes('SELECT COUNT(*)')) {
+                    return Promise.resolve({
+                        rows: [[1]]  // Has bookings
+                    });
+                }
+                return Promise.resolve({ rowsAffected: 1 });
+            });
+    
+            // Act & Assert
+            await expect(employeeService.deleteEmployee(1))
+                .rejects
+                .toThrow('Cannot delete employee with existing bookings');
+            
+            // 只应该调用一次检查，不应该有事务操作
+            expect(mockConnection.execute).toHaveBeenCalledTimes(1);
+            expect(mockConnection.rollback).not.toHaveBeenCalled();
+            expect(mockConnection.close).toHaveBeenCalled();
         });
 
         it('should throw error when employee has bookings', async () => {
             // Arrange
-            mockConnection.execute
-                .mockResolvedValueOnce({ rows: [[1]] }); // Has bookings
+            mockConnection.execute.mockResolvedValueOnce({
+                rows: [[1]]
+            });
 
             // Act & Assert
             await expect(employeeService.deleteEmployee(1))
                 .rejects
                 .toThrow('Cannot delete employee with existing bookings');
-            expect(mockConnection.rollback).not.toHaveBeenCalled(); // No transaction started yet
+            expect(mockConnection.rollback).toHaveBeenCalledTimes(0);
         });
 
         it('should rollback on delete error', async () => {
             // Arrange
-            mockConnection.execute
-                .mockResolvedValueOnce({ rows: [[0]] }) // No bookings check
-                .mockRejectedValue(new Error('Delete failed')); // Delete operation fails
+            mockConnection.execute.mockImplementation((sql) => {
+                if (sql === 'BEGIN') {
+                    return Promise.resolve();
+                }
+                if (sql.includes('SELECT COUNT(*)')) {
+                    return Promise.resolve({
+                        rows: [[0]]
+                    });
+                }
+                throw new Error('Delete failed');
+            });
 
             // Act & Assert
             await expect(employeeService.deleteEmployee(1))

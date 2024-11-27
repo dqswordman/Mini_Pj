@@ -1,3 +1,5 @@
+// src/services/positionService.js
+const oracledb = require('oracledb');
 const { executeQuery } = require('../config/database');
 
 class PositionService {

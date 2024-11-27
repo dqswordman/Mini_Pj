@@ -1,3 +1,4 @@
+const oracledb = require('oracledb');
 const { executeQuery } = require('../config/database');
 
 class PermissionService {
@@ -65,7 +66,7 @@ class PermissionService {
       }
 
       await connection.commit();
-      return await this.getPermissionsByPosition(positionId);
+      return permissions;
     } catch (error) {
       if (connection) {
         await connection.rollback();
@@ -76,7 +77,7 @@ class PermissionService {
         try {
           await connection.close();
         } catch (err) {
-          console.error(err);
+          console.error('Error closing connection:', err);
         }
       }
     }
