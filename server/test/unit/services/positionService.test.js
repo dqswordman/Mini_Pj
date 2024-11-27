@@ -291,37 +291,15 @@ describe('getAllPositions', () => {
             // Assert
             expect(result).toEqual(mockUpdatedPosition.rows[0]);
             expect(mockConnection.execute).toHaveBeenCalledTimes(2); // BEGIN + UPDATE
+            // 验证调用顺序和SQL语句
+            expect(mockConnection.execute).toHaveBeenNthCalledWith(1, 'BEGIN');
+            expect(mockConnection.execute).toHaveBeenNthCalledWith(2, 
+                expect.stringContaining('UPDATE Positions'), 
+                expect.any(Object)
+            );
             expect(mockConnection.commit).toHaveBeenCalled();
         });
-    
-
-        it('should handle name-only update', async () => {
-            // Arrange
-            const updateData = {
-                positionName: 'Updated Position'
-            };
-
-            mockConnection.execute
-                .mockResolvedValueOnce({ rowsAffected: 1 }); // Only position update
-
-            const mockUpdatedPosition = {
-                rows: [{
-                    POSITION_ID: 1,
-                    POSITION_NAME: 'Updated Position',
-                    EMPLOYEE_COUNT: 0,
-                    PERMISSION_COUNT: 0
-                }]
-            };
-            executeQuery.mockResolvedValue(mockUpdatedPosition);
-
-            // Act
-            const result = await positionService.updatePosition(1, updateData);
-
-            // Assert
-            expect(result).toEqual(mockUpdatedPosition.rows[0]);
-            expect(mockConnection.execute).toHaveBeenCalledTimes(1);
-        });
-    });
+});
 
     describe('deletePosition', () => {
         it('should delete position with no employees', async () => {

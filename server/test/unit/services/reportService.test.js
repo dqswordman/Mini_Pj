@@ -277,13 +277,14 @@ describe('ReportService', () => {
                 ]
             };
             executeQuery.mockResolvedValue(mockHistory);
-
+    
             // Act
             const result = await reportService.getLockHistory(1, new Date(), new Date());
-
+    
             // Assert
-            expect(result[0].REQUEST_TIME).toBeGreaterThan(result[1].REQUEST_TIME);
+            expect(result[0].REQUEST_TIME.getTime()).toBeGreaterThan(result[1].REQUEST_TIME.getTime());
         });
+    
     });
 
     describe('getSystemLogsStats', () => {

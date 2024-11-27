@@ -1,4 +1,5 @@
 const { executeQuery } = require('../config/database');
+const oracledb = require('oracledb');
 
 class RoomService {
   async getAllRooms() {

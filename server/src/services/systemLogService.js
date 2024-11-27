@@ -1,5 +1,7 @@
 // src/services/systemLogService.js
+
 const { executeQuery } = require('../config/database');
+const oracledb = require('oracledb');  // 添加这行
 
 class SystemLogService {
   // 获取系统日志

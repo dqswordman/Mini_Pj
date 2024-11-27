@@ -196,94 +196,94 @@ describe('SystemLogService', () => {
     });
 
     describe('createLog', () => {
+        const mockLogData = {
+            action: 'Create',
+            userId: 1,
+            details: 'Created new user'
+        };
+    
         it('should create log entry successfully', async () => {
-            // Arrange
-            const logData = {
-                action: 'Create',
-                userId: 1,
-                details: 'Created new user'
-            };
-
             const timestamp = new Date();
+            // 修改executeQuery的返回值格式
             executeQuery.mockResolvedValue({
                 outBinds: {
                     log_id: [1],
                     timestamp: [timestamp]
                 }
             });
-
-            // Act
-            const result = await systemLogService.createLog(logData);
-
-            // Assert
+    
+            const result = await systemLogService.createLog(mockLogData);
+    
             expect(result).toEqual({
                 logId: 1,
-                action: 'Create',
-                userId: 1,
-                details: 'Created new user',
+                ...mockLogData,
                 timestamp: timestamp
             });
             expect(executeQuery).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO SystemLogs'),
                 expect.objectContaining({
-                    action: 'Create',
-                    userId: 1,
-                    details: 'Created new user'
+                    action: mockLogData.action,
+                    userId: mockLogData.userId,
+                    details: mockLogData.details,
+                    log_id: { type: 'NUMBER', dir: 'BIND_OUT' },
+                    timestamp: { type: 'DATE', dir: 'BIND_OUT' }
                 })
             );
         });
-
+    
         it('should handle database error when creating log', async () => {
-            // Arrange
             executeQuery.mockRejectedValue(new Error('Database error'));
-
-            // Act & Assert
-            await expect(
-                systemLogService.createLog({
-                    action: 'Create',
-                    userId: 1,
-                    details: 'Test'
-                })
-            ).rejects.toThrow('Database error');
+    
+            await expect(systemLogService.createLog(mockLogData))
+                .rejects
+                .toThrow('Database error');
         });
     });
-
+    
     describe('cleanupOldLogs', () => {
         it('should delete old logs successfully', async () => {
-            // Arrange
+            // 修正 mock 实现顺序和返回值结构
             mockConnection.execute
-                .mockResolvedValueOnce({ rows: [{ COUNT: 5 }] }) // Count query
-                .mockResolvedValueOnce({ rowsAffected: 5 });     // Delete query
-
-            // Act
+                .mockResolvedValueOnce({ rowsAffected: 1 })  // BEGIN
+                .mockResolvedValueOnce({ 
+                    rows: [{ COUNT: 5 }],  // 注意这里要返回正确的结构
+                    rowsAffected: 1 
+                })
+                .mockResolvedValueOnce({ 
+                    rowsAffected: 5 
+                });  // DELETE 操作
+    
             const result = await systemLogService.cleanupOldLogs(30);
-
-            // Assert
+    
             expect(result).toEqual({
                 deletedCount: 5,
                 retentionDays: 30
             });
+            expect(mockConnection.execute).toHaveBeenCalledTimes(3); // Including BEGIN
             expect(mockConnection.commit).toHaveBeenCalled();
         });
-
+    
         it('should handle no logs to delete', async () => {
-            // Arrange
+            // 修正 mock 实现顺序和返回值结构
             mockConnection.execute
-                .mockResolvedValueOnce({ rows: [{ COUNT: 0 }] });
-
-            // Act
+                .mockResolvedValueOnce({ rowsAffected: 1 })  // BEGIN
+                .mockResolvedValueOnce({ 
+                    rows: [{ COUNT: 0 }],  // 注意这里要返回正确的结构
+                    rowsAffected: 0 
+                });
+    
             const result = await systemLogService.cleanupOldLogs(30);
-
-            // Assert
+    
             expect(result.deletedCount).toBe(0);
-            expect(mockConnection.execute).toHaveBeenCalledTimes(1);
+            expect(mockConnection.execute).toHaveBeenCalledTimes(2); // Including BEGIN
+            expect(mockConnection.commit).toHaveBeenCalled();
         });
-
+    
         it('should rollback on error', async () => {
-            // Arrange
-            mockConnection.execute.mockRejectedValue(new Error('Delete failed'));
-
-            // Act & Assert
+            mockConnection.execute
+                .mockImplementationOnce(() => Promise.resolve())  // BEGIN
+                .mockImplementationOnce(() => Promise.reject(new Error('Delete failed')));
+    
             await expect(systemLogService.cleanupOldLogs(30))
                 .rejects
                 .toThrow('Delete failed');
